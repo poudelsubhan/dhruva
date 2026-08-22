@@ -1,4 +1,146 @@
 @import "tailwindcss";
 
-/* Phase 0 skeleton: no design tokens here on purpose.
-   The design system (tokens, palette, core components) is owned by T1.2. */
+/* ═══════════════════════════════════════════════════════════════════════════
+   Dhruva visual contract — the CSS mirror of src/tokens.ts.
+
+   tokens.ts is CANONICAL. This block exists so Tailwind utilities resolve to
+   the same values D3 reads from JS. src/tokens.test.ts parses this `@theme`
+   block and fails the build on any drift in either direction.
+
+   Instrument panel: near-black chassis, two reserved hues.
+     coherence  cyan #35dcf2 — coherence ONLY, appears nowhere else
+     alarm      red  #f54123 — breach and rollback ONLY
+   Everything else is achromatic; event identity is carried by shape.
+   ═══════════════════════════════════════════════════════════════════════════ */
+@theme {
+  /* base — the chassis. 800 is the panel/chart surface all marks validate against. */
+  --color-base-950: #07080b;
+  --color-base-900: #0b0d12;
+  --color-base-800: #12151c;
+  --color-base-700: #1a1e27;
+  --color-base-600: #252a35;
+  --color-base-500: #333947;
+
+  /* edge — borders. Chrome only; never carries meaning. */
+  --color-edge-subtle: #1e2330;
+  --color-edge-default: #2d3445;
+  --color-edge-strong: #4a556b;
+
+  /* ink — type. Never wears a data color. */
+  --color-ink-primary: #f2f5fa;
+  --color-ink-secondary: #b3b6bb;
+  --color-ink-muted: #7f8a9c;
+  --color-ink-inverse: #07080b;
+
+  /* coherence — RESERVED. Gauge arc, sparkline, decay curve. 400 is the accent. */
+  --color-coherence-200: #c9f6fe;
+  --color-coherence-300: #7eecfd;
+  --color-coherence-400: #35dcf2;
+  --color-coherence-500: #2cc1d4;
+  --color-coherence-600: #23a4b5;
+  --color-coherence-700: #1a8896;
+  --color-coherence-800: #106a75;
+
+  /* alarm — RESERVED. Breach and rollback. 400 is the accent. */
+  --color-alarm-200: #fdcabf;
+  --color-alarm-300: #fa8f7a;
+  --color-alarm-400: #f54123;
+  --color-alarm-500: #c92c11;
+  --color-alarm-600: #9e1f08;
+
+  /* state — muted verdict colors. pass recedes; warn steps forward. */
+  --color-state-pass: #788c7f;
+  --color-state-warn: #f9b73f;
+
+  /* type scale */
+  --text-micro: 0.6875rem;
+  --text-caption: 0.8125rem;
+  --text-body: 0.9375rem;
+  --text-lead: 1.125rem;
+  --text-title: 1.5rem;
+  --text-display: 2.25rem;
+  --text-readout: 3.5rem;
+
+  /* font stacks — system sans everywhere, including the hero figure */
+  --font-sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, Liberation Mono, monospace;
+
+  /* spacing — `hair` is the dataviz surface gap (2px between touching marks) */
+  --spacing-hair: 0.125rem;
+  --spacing-tick: 0.25rem;
+  --spacing-tight: 0.5rem;
+  --spacing-snug: 0.75rem;
+  --spacing-gutter: 1rem;
+  --spacing-panel: 1.25rem;
+  --spacing-bay: 2rem;
+  --spacing-deck: 3rem;
+
+  /* radii — `mark` is the dataviz 4px rounded data-end */
+  --radius-tick: 0.125rem;
+  --radius-mark: 0.25rem;
+  --radius-control: 0.375rem;
+  --radius-panel: 0.625rem;
+  --radius-pill: 9999px;
+
+  /* motion — stream pulse on arrival, value tweens. Nothing decorative. */
+  --motion-instant: 90ms;
+  --motion-pulse: 420ms;
+  --motion-gauge: 620ms;
+  --motion-arc: 900ms;
+
+  --ease-instrument: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* layering */
+  --z-track: 10;
+  --z-arc: 20;
+  --z-playhead: 30;
+  --z-tooltip: 60;
+  --z-overlay: 80;
+}
+
+/* The one piece of motion in the system: an event lands on the stream. */
+@keyframes dhruva-stream-pulse {
+  0% {
+    opacity: 0.15;
+    transform: scale(0.72);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(1.14);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@layer components {
+  .stream-pulse {
+    animation: dhruva-stream-pulse var(--motion-pulse) var(--ease-instrument) both;
+  }
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: var(--color-base-900);
+    color: var(--color-ink-primary);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* No thin hairlines carrying meaning: focus is a 2px ring, not a 1px outline. */
+  :focus-visible {
+    outline: 2px solid var(--color-ink-primary);
+    outline-offset: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stream-pulse {
+    animation: none;
+  }
+}

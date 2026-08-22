@@ -1,6 +1,14 @@
-# Dhruva — Implementation Doc + Phase Plan (v2)
+# Dhruva — Implementation Doc + Phase Plan (v3)
 
 Long Horizon Agents Build Day · AGI House · Aug 22, 2026
+
+**v3 (Aug 22).** Adds the **knowledge ledger** — accumulated learnings that survive rollback, with
+provenance-based eviction of anything traceable to a corruption ("rollback without amnesia"), carried
+across runs. Adds **swarm supervision as a projected run** — real contracts, real event log, mock-driven
+view, no live swarm subsystem; see Tiering below. Also folds in three mechanism corrections found by
+review: the *confirmed-checkpoint* rollback target rule (without which the non-amnesic mechanism is a
+no-op), the `failed_approach` admission carve-out, and a fully deterministic taint audit with no judge call
+on the rollback path.
 
 ---
 
@@ -18,10 +26,41 @@ Long Horizon Agents Build Day · AGI House · Aug 22, 2026
 6. Twin mode runs supervised vs. unsupervised on an identical task + injection schedule; the unsupervised decay curve renders with a computed coherence half-life.
 7. Replay mode scrubs a completed run, time-compressed, from the same event log the live view renders.
 8. All three scenarios pass end-to-end twice consecutively without intervention.
+9. Knowledge accumulates: verified learnings are minted into a hash-chained ledger, and the ledger's
+   contents are visible in the UI as they accrue.
+10. Rollback is non-amnesic: on breach, work state reverts to the checkpoint while clean learnings are
+    retained and re-injected, and every learning whose provenance traces to a poisoned observation or an
+    injected instruction is evicted. The retained/evicted split is rendered on the timeline, and a
+    `ledger_audit` event records it.
+11. Knowledge carries across runs: a second run of the same task pack seeds from the first run's clean
+    ledger, and the recovery-step delta between seeded and cold runs is measured and reported.
 
 **Constraints.** Solo operator driving parallel coding agents — one worktree per task, merged at phase gates. The web UI is a first-class deliverable with its own design system. Stack decided here so no task relitigates it: FastAPI + Python backend (websockets, asyncio), React + TypeScript + Vite frontend, Tailwind for tokens, D3 for graph and curves. The verifier's judge model may run on a different provider than the wrapped agent (mixed-provider is by design). Day-of mandates arrive at the Aug 22 keynote.
 
-**Out of scope.** General drift detection beyond the scripted scenarios; real multi-hour runs (time compression is simulated); persistence past the demo; auth; multi-user; production hardening.
+**Tiering and cut rules (v3).** The build does not fit the day at full scope; review costed the base plan
+as missing the 19:00 submission gate by 1–5 hours before any v3 work. So scope is tiered and the cut rules
+are wall-clock, not judgement calls:
+
+- **Tier A — must-have.** Everything in Phases 0–4, plus the knowledge ledger (T2.11), non-amnesic rollback
+  (T3.1 extension), and cross-run carryover. Never cut: the ledger makes the *existing* rollback demo
+  strictly better rather than adding a second half-built system.
+- **Tier B — swarm, as a projected run.** Swarm supervision ships as a **mock-driven replay view**, not as
+  a live subsystem. `backend/swarm/` is never written. The mock generator emits a schema-valid three-agent
+  swarm log; the swarm view renders it. This is architecturally honest rather than a fake: replay is
+  already a first-class mode (criterion 7 requires replay to render from the same event log as live), so a
+  swarm run rendered from a synthetic log differs from replaying a real run only in the log's provenance —
+  and the contracts are real, so a later live implementation emits exactly these events. **The view is
+  labelled `PROJECTED` on screen and in the submission.** Two isolated lanes (T1.1 mock extension, T2.12
+  view) touching nothing on the critical path; ~4h parallel, zero concurrency surface, zero live risk.
+- **Cut rule.** At **15:00**, any Tier-A task not merged is descoped to its canned-fixture fallback. At
+  **17:00**, feature work stops entirely and the remaining time is Phase 6 (submission + rehearsal); Tier B
+  is cut wholesale at this point if not green, which is clean because nothing imports it. The 19:00 draft
+  save is a hard external gate and outranks every item above.
+
+**Honesty rule.** Any surface rendering synthetic data says so on screen. The demo may show projected data;
+it may not imply that projected data was produced by a live run.
+
+**Out of scope.** General drift detection beyond the scripted scenarios; real multi-hour runs (time compression is simulated); persistence past the demo; auth; multi-user; production hardening. **Swarm execution** — supervising N concurrent agents — is contract-reserved and explicitly not built today.
 
 ---
 
@@ -37,8 +76,8 @@ Long Horizon Agents Build Day · AGI House · Aug 22, 2026
 |---|---|---|---|---|
 | 0 | Scaffold | repo + CI; submission skeleton | — | CI green; dev stack boots |
 | 1 | Contract freeze | API/event contracts + mock generator; visual contracts | schema, checkpoint format, 3 adapter seams, transport, ownership map; design tokens | traceability map complete; mocks validate; sample screen renders |
-| 2 | Parallel implementation | harness; checkpointer; verifier; injector; task pack; 5 UI views | (from P1) | unit suites green; all views render mocks; stub run schema-valid |
-| 3 | Integration | rollback controller; twin orchestrator; live wiring | run-controller interface held | forced-breach rollback; concurrent twins; live run visible e2e |
+| 2 | Parallel implementation | harness; checkpointer; verifier; injector; task pack; **knowledge ledger**; 5 UI views; **swarm projection (Tier B)** | (from P1) | unit suites green; all views render mocks; stub run schema-valid; ledger admission + taint suites green |
+| 3 | Integration | rollback controller (**+ ledger audit, confirmed-checkpoint rule**); twin orchestrator; live wiring | run-controller interface held | forced-breach rollback; concurrent twins; live run visible e2e |
 | 4 | Hardening | scenario A; scenario B; scenario C; twin live wiring | threshold config (calibrated then frozen at phase open) | 3 scenarios deterministic ×2; real decay curve + half-life |
 | — | *external input: keynote mandates (Aug 22) — pre-stage boundary* | | | |
 | 5 | Mandate binding | agent adapter; provider swap; task skin (as applicable) | seams from P1, unchanged | bound config passes P4 suite |
@@ -93,6 +132,30 @@ Long Horizon Agents Build Day · AGI House · Aug 22, 2026
   - **Checkpoint** `{id, run_id, seq_range: [int,int], intent_digest, snapshot, parent_hash, hash, verified: true}`. `intent_digest = {objective: str, constraints: [str], done_criteria: [str], key_decisions: [str], open_subgoals: [str]}` (≤200 tokens total). `snapshot = {file_hashes: {path: sha256}, files_ref: str (snapshot dir), scratchpad: str}`. **Hash chain:** `hash = sha256(parent_hash + canonical_json(intent_digest) + canonical_json(snapshot.file_hashes) + str(seq_range))`; genesis `parent_hash = sha256(task_spec)`. Canonical JSON = sorted keys, no whitespace.
   - **Adapter seams (3):** `AgentAdapter {init(task_spec) → handle; step(handle, execute: bool) → StepResult (execute=false returns the proposed next step without acting — the pre-flight hook); inject_messages(handle, msgs); get_context(handle) → msgs; set_context(handle, msgs)}` · `ModelProvider {complete(messages, tools, temperature, json_mode) → response}` with two implementations planned: Anthropic API and OpenAI-compatible (base-URL configurable) · `TaskPack {spec: str; fixtures_dir; tools: [ToolDef]; snapshot(workdir) → snapshot; restore(snapshot, workdir); progress(workdir) → float in [0,1]}`.
   - **Transport:** WS `/ws/runs/{id}` pushes RunEvents in seq order; REST `POST /runs {mode: supervised|unsupervised|twin, task, scenario?, at_step?}`, `POST /runs/{id}/inject {scenario, at_step|now}`, `GET /runs`, `GET /runs/{id}/events` (JSONL — the replay source). Events are append-only JSONL on disk per run; disk log and WS carry identical objects (single source of truth).
+  - **Knowledge ledger (v3).** `RunEvent.type` gains `learning` and `ledger_audit`; the envelope gains
+    optional `agent_id: str|null` and `swarm_id: str|null` (reserved, always null today), and the type enum
+    reserves `swarm_checkpoint, swarm_verification, bulletin, quarantine` with no payload spec — reserving
+    the names now costs nothing and prevents a renumbering later.
+    `LedgerEntry {id, run_id, agent_id, kind: fact|constraint|failed_approach|resource|api_shape,
+    text (≤30 words), confidence, source_seqs: [int], minted_at_seq, checkpoint_ref,
+    status: clean|suspect|evicted, status_reason, supersedes, superseded_by,
+    uses: [{agent_id, at_seq}], scope: run|task_pack}`.
+    `id = sha256(canonical_json({run_id, minted_at_seq, text_normalized}))[:16]` — computed over
+    **immutable** fields only. `status`, `confidence`, `uses`, and `superseded_by` mutate over an entry's
+    life and are therefore **outside** the id and outside every hash. The ledger's own chain hashes the
+    *admission sequence* (append-only), never entry state; the checkpoint's `ledger_head` is a plain
+    reference, **not** an input to the checkpoint hash — otherwise a single eviction would invalidate every
+    downstream checkpoint.
+    `payload learning {entry_id, kind, text, confidence, source_seqs}` ·
+    `payload ledger_audit {rollback_ref: int, retained: [entry_id], evicted: [{entry_id, reason}],
+    rehabilitated: [entry_id]}` — exactly one per rollback.
+  - **`TaskPack.progress()` returns a record, not a float (v3).**
+    `ProgressResult {score: float in [0,1], per_test: {node_id: "pass"|"fail"}, tests_tampered: bool}`.
+    Rationale in `docs/build-decisions.md` D2: `progress = passing/12` is computed by running the suite,
+    and scenario S3's corruption *is* an edit to the suite — so the metric the demo rests on is the exact
+    thing one scenario attacks. `score` counts only twelve canonical node ids hardcoded in the pack;
+    `tests_tampered` is set by comparing `tests/` against a sha256 baseline shipped with the pack, and the
+    verifier treats it as an immediate breach regardless of the composite score.
   - **Mock generator:** `scripts/mock_run.py` emits two synthetic runs as JSONL — happy path (~40 events, 3 checkpoints) and breach path (injection → 2 warns → breach → rollback → resume → complete) — plus a WS replayer serving them at configurable speed.
   - **Ownership map:** `docs/ownership.md` table assigning every Phase 2/3 task its directory set (as listed per task below).
 - Verification: both mock runs validate against the schemas; generated Python/TS types round-trip a mock event; `docs/traceability.md` maps each of the 8 acceptance criteria to named contract elements.
@@ -174,6 +237,64 @@ Long Horizon Agents Build Day · AGI House · Aug 22, 2026
 - Files: `frontend/src/views/replay/`.
 - Verification: scrubbing a mock run updates all shared components consistently at every position.
 
+**T2.11 — Knowledge ledger (v3).**
+- Mechanism: append-only store of `LedgerEntry` rows at `runs/{id}/ledger.jsonl`, single-writer (the run
+  controller owns the file; nothing else writes it).
+  - **Minting rides the existing verification call** — the judge's response schema gains
+    `learnings: [{kind, text, confidence, source_seqs}]` alongside `alignment`. No new cadence, no extra
+    round trip, no added hot-loop latency.
+  - **Admission.** Candidates from a `pass` window are admitted. Candidates from a `warn` window stage and
+    are admitted retroactively if the next window passes. Candidates from a `breach` window are discarded —
+    **except `kind: failed_approach`, which is admitted from any window with `confidence` halved.** Review
+    proved the naive pass-only rule is anti-correlated with value: a window verdicts incoherent precisely
+    when "this approach fails" is true and most worth keeping, so the deepest dead ends — the ones worth
+    the most recovery steps — were exactly the ones guaranteed to be destroyed.
+  - **Dedup** via rapidfuzz (already a dependency for the repetition score): normalized similarity > 0.85
+    merges `source_seqs` and raises confidence. Contradiction within a kind supersedes, newest wins, and
+    the superseded entry keeps `superseded_by` so the provenance graph can show knowledge being corrected.
+  - **Taint — fully deterministic, no judge call.** `poison_seqs` = seqs of observations with
+    `poisoned: true` plus the `injection` event seq. Score
+    `T = 0.60·S_struct + 0.25·S_time + 0.15·S_dep`, evicted when `T ≥ θ_evict`:
+    `S_struct` = 1 if `source_seqs ∩ poison_seqs ≠ ∅` else 0 · `S_time` = fraction of the entry's
+    `source_seqs` lying at or after the injection seq, and **0 when no injection has fired** (never
+    undefined; a breach does not require a preceding warn) · `S_dep` = 1 if the entry supersedes or cites
+    an already-evicted entry, computed as a closure over the supersession DAG, which is acyclic by
+    construction and therefore terminates.
+    The audit is a **pure synchronous function — no I/O, no network, no timeout** — on the rollback path,
+    which is the plan's highest-risk mechanism. Review costed a judge-based rehabilitation call here as the
+    fourth-largest risk in the amendment: it puts dead air and a failure mode on the one path that must not
+    stall, and it converts judge noise into agent-trajectory divergence, which makes criterion 8's
+    determinism requirement strictly harder. Rollback must succeed even if the auditor raises; the test
+    asserting that is written first.
+  - **Retrieval** ranks clean entries by `confidence × recency × |uses|`, hard-capped at 250 tokens.
+  - **Cross-run.** On a run that reaches 12/12, entries with `scope: task_pack` and `status: clean` append
+    to `fixtures/task_repo/ledger.jsonl`. The next run seeds from it at `confidence × 0.8`. Nothing
+    `suspect` or `evicted` ever crosses a run boundary.
+- Files: `backend/ledger/`.
+- Verification: admission honors all four verdict paths including the `failed_approach` carve-out; a
+  seeded taint fixture evicts exactly the contaminated set and its transitive closure and nothing else;
+  dedup merges near-duplicates; retrieval respects the token cap; cross-run seeding round-trips and refuses
+  to carry a non-clean entry. Judge mocked throughout.
+
+**T2.12 — Swarm projection: mock + view (Tier B).**
+- Builds: a synthetic three-agent swarm run and the view that renders it. **No `backend/swarm/`. No live
+  swarm execution. No concurrency surface.**
+- Mechanism: `scripts/mock_swarm.py` emits a schema-valid JSONL log over the frozen contracts — three
+  `agent_id`s on one `swarm_id`, working the task pack's three disjoint decomposition groups (T2.5's
+  partition exists precisely so this is coherent rather than invented). The scripted arc: all three agents
+  progress; agent 2 takes a poisoned `run_tests` observation; agent 2 mints a false `learning` ("suite
+  passes, module complete"); the admission gate holds it because agent 2's window verdicts breach, so it
+  never reaches agents 1 and 3 — emitted as `quarantine`; agent 2 rolls back locally while 1 and 3 keep
+  stepping; agent 2 rejoins. The claim the frame makes: **the swarm survives a poisoned member.**
+  The view renders three synced lanes on a shared step domain, a swarm coherence readout, the quarantine
+  card, and the local-rollback arc on lane 2 only. It reuses `TimelineTrack` and `Panel` unchanged.
+- **Labelling is a requirement, not a nicety:** the view renders a persistent `PROJECTED` marker, and the
+  submission says the same. Nothing may imply a live swarm ran.
+- Files: `scripts/mock_swarm.py`, `frontend/src/views/swarm/`.
+- Verification: the emitted log validates against the schemas exactly as a live log would; the view renders
+  it with no console errors; the quarantine beat and the single-lane rollback arc appear at the scripted
+  seqs; the `PROJECTED` marker is present and cannot be dismissed.
+
 **T2.10 — UI: injection panel.**
 - Mechanism: three scenario cards (arm-at-step / fire-now), armed-state indicator, disabled in replay mode; calls `POST /runs/{id}/inject`.
 - Files: `frontend/src/views/inject/`.
@@ -200,9 +321,20 @@ Long Horizon Agents Build Day · AGI House · Aug 22, 2026
 **T3.1 — Rollback controller.**
 - Mechanism — the full procedure, replacing the Phase 2 stub hook:
   1. On breach: controller halts stepping.
-  2. Target = latest checkpoint whose chain passes `integrity_check` (walk from genesis, recompute hashes).
+  2. Target = latest **confirmed** checkpoint whose chain passes `integrity_check` (walk from genesis,
+     recompute hashes). **A checkpoint is `confirmed` only once the window *after* it also verdicts
+     `pass`** — v3 correction. Two reasons, one of which is a latent v2 bug. (a) v2 selects the latest
+     checkpoint, which is minted at the end of the last passing window — so the discarded range contains
+     only `warn`/`breach` windows, which by the admission rule minted nothing, so the retained-knowledge
+     set would be **empty by construction** and the whole non-amnesic mechanism a no-op. (b) Independently,
+     v2 can restore a snapshot minted *after* the injection landed, i.e. roll back into the corruption.
+     Confirmation is the same one-window staging rule the ledger already applies, lifted to checkpoints.
   3. `TaskPack.restore(target.snapshot)` — workdir rewritten; the diff between corrupted and restored state is logged.
-  4. **Context reconstruction:** `AgentAdapter.set_context` with — system prompt; the intent digest rendered as the authoritative objective block; a condensed history (one provider call summarizing accepted work up to the checkpoint, ≤150 tokens); an explicit rollback notice naming the discarded seq range and the breach rationale. The poisoned post-checkpoint context is never replayed.
+  3b. **Ledger audit** (v3): run the deterministic taint audit over entries minted after the target,
+     partitioning them into retained and evicted. Pure, synchronous, no I/O. Emit exactly one
+     `ledger_audit` event and reference it from the rollback event. **Rollback must complete even if the
+     auditor raises** — the test asserting that is written before the auditor exists.
+  4. **Context reconstruction:** `AgentAdapter.set_context` with — system prompt; the intent digest rendered as the authoritative objective block; a condensed history (one provider call summarizing accepted work up to the checkpoint, ≤150 tokens); **a retained-knowledge block (≤250 tokens, ranked, from the ledger audit) and an explicit eviction notice naming what was discarded and why** — telling the agent "you previously believed the suite passed; that observation was falsified" is itself an anti-drift signal; an explicit rollback notice naming the discarded seq range and the breach rationale. The poisoned post-checkpoint context is never replayed.
   5. **Pre-flight gate:** `step(execute=false)` yields the agent's proposed next step; run the verifier's alignment component on {intent digest, proposal}. Pass → emit resume, loop continues. Fail → step back one checkpoint and retry once; a second failure lands in HALTED_ALERT (UI shows the halt).
   6. Emit the rollback event `{from_seq, target_checkpoint_id, discarded_range}`.
 - Files: `backend/rollback/`.
