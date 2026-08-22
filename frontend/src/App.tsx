@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import clsx from 'clsx'
 import LiveView from './views/live/LiveView'
 import TwinView from './views/twin/TwinView'
+import GraphView from './views/graph/GraphView'
 import { useRunStream } from './data/useRunStream'
 import {
   armInjection,
@@ -63,6 +64,7 @@ export default function App() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [scrub, setScrub] = useState<number | null>(null)
+  const [view, setView] = useState<'timeline' | 'graph'>('timeline')
   const [twin, setTwin] = useState<{ supervised: DhruvaEvent[]; unsupervised: DhruvaEvent[] } | null>(null)
 
   const liveRunId = source?.kind === 'live' ? source.runId : null
@@ -331,11 +333,33 @@ export default function App() {
           </div>
         ) : null}
 
+        {source && source.kind !== 'twin' ? (
+          <div className="flex gap-tight">
+            {(['timeline', 'graph'] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setView(v)}
+                className={clsx(
+                  'rounded-mark border px-3 py-1 font-mono text-micro tracking-[0.14em] uppercase',
+                  view === v
+                    ? 'border-coherence-400 text-coherence-400'
+                    : 'border-edge-default text-ink-muted hover:border-edge-strong',
+                )}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
         {source?.kind === 'twin' ? (
           <TwinView
             supervised={twin?.supervised ?? []}
             unsupervised={twin?.unsupervised ?? []}
           />
+        ) : source && view === 'graph' ? (
+          <GraphView events={shown} />
         ) : source ? (
           <LiveView
             events={shown}

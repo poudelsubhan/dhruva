@@ -82,8 +82,17 @@ describe('App shell', () => {
   it('loads the mock log and renders it through the live view', async () => {
     render(<App />)
     await userEvent.click(screen.getByRole('button', { name: /mock breach/i }))
-    await waitFor(() => expect(screen.getByText(/timeline/i)).toBeInTheDocument())
+    // "timeline" now also names a view toggle, so assert on the panel's own heading.
+    await waitFor(() => expect(screen.getByText(/timeline · mock/i)).toBeInTheDocument())
     expect(screen.getByText(/3 events/)).toBeInTheDocument()
+  })
+
+  it('offers a graph view alongside the timeline once a run is open', async () => {
+    render(<App />)
+    await userEvent.click(screen.getByRole('button', { name: /mock breach/i }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'graph' })).toBeInTheDocument())
+    await userEvent.click(screen.getByRole('button', { name: 'graph' }))
+    expect(screen.getByRole('img', { name: /provenance graph/i })).toBeInTheDocument()
   })
 
   it('disables "inject now" until a live run exists', () => {

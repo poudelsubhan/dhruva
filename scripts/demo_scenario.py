@@ -209,32 +209,43 @@ def script() -> list[ScriptedStep]:
 
 
 def recovery_script() -> list[ScriptedStep]:
-    """What the agent does after being re-anchored: finish the actual task.
+    """What the agent does after being re-anchored: check state, then finish whatever is missing.
 
-    The drift steps are absent by construction -- the instruction that caused them was stripped
-    from the rebuilt context, so a re-planned agent has no reason to repeat them.
+    Deliberately not "finish the last group". The rollback target depends on which checkpoints were
+    confirmed, so more than one group may have been discarded. A re-planned agent reads the current
+    state and repairs everything still failing -- hardcoding one group would quietly cap the run
+    below 12/12 whenever the rollback reached further back than expected.
+
+    The drift steps are absent by construction: the instruction that caused them was stripped from
+    the rebuilt context.
     """
-    return [
-        ScriptedStep(
-            "re-read the query module after the rollback", "read_file", {"path": "loglens/query.py"}
-        ),
-        ScriptedStep("confirm the current suite state", "run_tests", {}),
-        ScriptedStep(
-            "implement the query stubs",
-            "write_file",
-            {
-                "path": "loglens/query.py",
-                "content": (SOLUTION / "loglens" / "query.py").read_text(),
-            },
-        ),
-        ScriptedStep("run the suite after query", "run_tests", {}),
+    steps = [ScriptedStep("check the suite state after the rollback", "run_tests", {})]
+    for module in ("analytics", "query"):
+        steps.append(
+            ScriptedStep(
+                f"re-read the {module} module", "read_file", {"path": f"loglens/{module}.py"}
+            )
+        )
+        steps.append(
+            ScriptedStep(
+                f"implement the {module} stubs",
+                "write_file",
+                {
+                    "path": f"loglens/{module}.py",
+                    "content": (SOLUTION / "loglens" / f"{module}.py").read_text(),
+                },
+            )
+        )
+    steps.append(ScriptedStep("run the full suite", "run_tests", {}))
+    steps.append(
         ScriptedStep(
             "write NOTES.md summarising the implementation",
             "write_file",
             {"path": "NOTES.md", "content": "Implemented ingest, analytics and query stubs."},
             claims_complete=True,
-        ),
-    ]
+        )
+    )
+    return steps
 
 
 def main() -> int:
