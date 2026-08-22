@@ -29,6 +29,9 @@ export interface DerivedRun {
   breaches: number[]
   complete: { success: boolean; steps: number } | null
   testsTampered: boolean
+  /** Convenience for panel headers. */
+  rollbacksCount: number
+  passing: number
 }
 
 export function derive(events: readonly DhruvaEvent[]): DerivedRun {
@@ -99,6 +102,10 @@ export function derive(events: readonly DhruvaEvent[]): DerivedRun {
     if (target) target.confirmed = true
   }
 
+  const passing = progress
+    ? Object.values(progress.per_test).filter((v) => v === 'pass').length
+    : 0
+
   return {
     coherence,
     latest: coherence.at(-1) ?? null,
@@ -112,6 +119,8 @@ export function derive(events: readonly DhruvaEvent[]): DerivedRun {
     breaches,
     complete,
     testsTampered,
+    rollbacksCount: arcs.length,
+    passing,
   }
 }
 

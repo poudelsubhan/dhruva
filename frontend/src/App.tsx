@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import clsx from 'clsx'
 import LiveView from './views/live/LiveView'
+import TwinView from './views/twin/TwinView'
 import { useRunStream } from './data/useRunStream'
 import {
   armInjection,
@@ -28,6 +29,7 @@ type Source =
   | { kind: 'live'; runId: string }
   | { kind: 'replay'; runId: string }
   | { kind: 'mock'; name: 'happy' | 'breach' }
+  | { kind: 'twin'; supervised: string; unsupervised: string }
 
 const SCENARIOS: { key: string; label: string; blurb: string }[] = [
   { key: 's1', label: 'S1 · contradictory instruction', blurb: 'a plausible redirect that supersedes the objective' },
@@ -61,6 +63,7 @@ export default function App() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [scrub, setScrub] = useState<number | null>(null)
+  const [twin, setTwin] = useState<{ supervised: DhruvaEvent[]; unsupervised: DhruvaEvent[] } | null>(null)
 
   const liveRunId = source?.kind === 'live' ? source.runId : null
   const stream = useRunStream(liveRunId)
@@ -87,6 +90,20 @@ export default function App() {
     const timer = setInterval(load, 1500)
     return () => clearInterval(timer)
   }, [liveRunId, stream.events.length])
+
+  useEffect(() => {
+    if (source?.kind !== 'twin') return
+    const load = async () => {
+      const [a, b] = await Promise.all([
+        getRunEvents(source.supervised).catch(() => []),
+        getRunEvents(source.unsupervised).catch(() => []),
+      ])
+      setTwin({ supervised: a, unsupervised: b })
+    }
+    load()
+    const timer = setInterval(load, 1500)
+    return () => clearInterval(timer)
+  }, [source])
 
   const allEvents = source?.kind === 'live' ? stream.events : staticEvents
   const maxSeq = allEvents.length ? allEvents[allEvents.length - 1].seq : 0
@@ -131,6 +148,26 @@ export default function App() {
     }
   }
 
+  async function launchTwin() {
+    setBusy(true)
+    setError(null)
+    try {
+      const pair = (await startRun({
+        mode: 'twin',
+        task: 'loglens',
+        scenario,
+        at_step: atStep,
+      })) as unknown as { supervised: string; unsupervised: string }
+      setSource({ kind: 'twin', supervised: pair.supervised, unsupervised: pair.unsupervised })
+      setTwin({ supervised: [], unsupervised: [] })
+      refreshRuns()
+    } catch (exc) {
+      setError(String(exc))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function openMock(name: 'happy' | 'breach') {
     setBusy(true)
     try {
@@ -150,12 +187,10 @@ export default function App() {
     await armInjection(liveRunId, scenario, { now: true }).catch((exc: unknown) => setError(String(exc)))
   }
 
-  const label =
-    source === null
-      ? 'no run'
-      : source.kind === 'mock'
-        ? `mock · ${source.name}`
-        : source.runId
+  let label = 'no run'
+  if (source?.kind === 'mock') label = `mock · ${source.name}`
+  else if (source?.kind === 'twin') label = `twin · ${source.supervised}`
+  else if (source) label = source.runId
 
   return (
     <div className="min-h-screen bg-base-900 text-ink-primary">
@@ -248,6 +283,14 @@ export default function App() {
             </button>
             <button
               type="button"
+              disabled={busy}
+              onClick={launchTwin}
+              className="rounded-mark border border-edge-default px-4 py-2 font-mono text-micro tracking-[0.14em] text-ink-secondary uppercase transition-colors hover:border-edge-strong disabled:opacity-40"
+            >
+              twin run
+            </button>
+            <button
+              type="button"
               onClick={() => openMock('breach')}
               className="rounded-mark border border-edge-default px-4 py-2 font-mono text-micro tracking-[0.14em] text-ink-muted uppercase hover:border-edge-strong"
             >
@@ -288,7 +331,12 @@ export default function App() {
           </div>
         ) : null}
 
-        {source ? (
+        {source?.kind === 'twin' ? (
+          <TwinView
+            supervised={twin?.supervised ?? []}
+            unsupervised={twin?.unsupervised ?? []}
+          />
+        ) : source ? (
           <LiveView
             events={shown}
             config={config}
