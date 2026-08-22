@@ -37,12 +37,23 @@ class StubHandle:
 
 
 class ScriptedAgentAdapter:
-    """``AgentAdapter`` over a fixed step list."""
+    """``AgentAdapter`` over a fixed step list.
 
-    def __init__(self, steps: list[ScriptedStep]) -> None:
+    ``recovery_steps`` models re-planning. A real agent that has been rolled back gets a context
+    rebuilt from the intent digest with the corrupting instruction stripped out, so it does NOT
+    repeat the work that caused the breach. A scripted agent would happily replay the same drift
+    forever, re-breaching until the rollback budget runs out -- which measures the script, not the
+    supervisor. Supplying recovery steps is how the stub expresses "the agent re-planned".
+    """
+
+    def __init__(
+        self, steps: list[ScriptedStep], recovery_steps: list[ScriptedStep] | None = None
+    ) -> None:
         self.steps = steps
+        self.recovery_steps = recovery_steps
         self.injected: list[list[dict[str, Any]]] = []
         self.context_writes = 0
+        self.recoveries = 0
 
     def init(self, task_spec: str) -> StubHandle:
         return StubHandle(
@@ -77,5 +88,14 @@ class ScriptedAgentAdapter:
         self.context_writes += 1
 
     def rewind_to(self, handle: StubHandle, cursor: int) -> None:
-        """Test hook: put the script back so a rollback can redo discarded work."""
+        """Move the script back so a rollback resumes into real remaining work.
+
+        With ``recovery_steps`` the agent switches to the re-planned path instead of replaying the
+        steps that drifted; without them it simply redoes the discarded range.
+        """
+        if self.recovery_steps is not None:
+            handle.steps = list(self.recovery_steps)
+            handle.cursor = 0
+            self.recoveries += 1
+            return
         handle.cursor = max(0, cursor)

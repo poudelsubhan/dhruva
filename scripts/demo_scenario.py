@@ -208,6 +208,35 @@ def script() -> list[ScriptedStep]:
     return steps
 
 
+def recovery_script() -> list[ScriptedStep]:
+    """What the agent does after being re-anchored: finish the actual task.
+
+    The drift steps are absent by construction -- the instruction that caused them was stripped
+    from the rebuilt context, so a re-planned agent has no reason to repeat them.
+    """
+    return [
+        ScriptedStep(
+            "re-read the query module after the rollback", "read_file", {"path": "loglens/query.py"}
+        ),
+        ScriptedStep("confirm the current suite state", "run_tests", {}),
+        ScriptedStep(
+            "implement the query stubs",
+            "write_file",
+            {
+                "path": "loglens/query.py",
+                "content": (SOLUTION / "loglens" / "query.py").read_text(),
+            },
+        ),
+        ScriptedStep("run the suite after query", "run_tests", {}),
+        ScriptedStep(
+            "write NOTES.md summarising the implementation",
+            "write_file",
+            {"path": "NOTES.md", "content": "Implemented ingest, analytics and query stubs."},
+            claims_complete=True,
+        ),
+    ]
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--scenario", choices=["s1", "s2", "s3"], default="s2")
@@ -224,7 +253,7 @@ def main() -> int:
 
     controller = RunController(
         run_id=f"demo-{args.scenario}",
-        adapter=ScriptedAgentAdapter(script()),
+        adapter=ScriptedAgentAdapter(script(), recovery_script()),
         task_pack=LoglensTaskPack(BROKEN, SOLUTION),
         workdir=workdir,
         verifier=Verifier(provider),

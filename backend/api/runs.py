@@ -115,11 +115,12 @@ class RunRegistry:
             injector = Injector()
             injector.arm(scenario, at_step if at_step is not None else 6)
 
+        from scripts.demo_scenario import recovery_script
         from scripts.demo_scenario import script as demo_script
 
         controller = RunController(
             run_id=run_id,
-            adapter=ScriptedAgentAdapter(script or demo_script()),
+            adapter=ScriptedAgentAdapter(script or demo_script(), recovery_script()),
             task_pack=LoglensTaskPack(settings.fixtures_dir / "task_repo"),
             workdir=workdir,
             verifier=Verifier(provider),
