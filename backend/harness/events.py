@@ -28,6 +28,7 @@ class EventStore:
         self._subscribers: list[asyncio.Queue[RunEvent]] = []
         self._clock = clock or (lambda: datetime.now(UTC).isoformat().replace("+00:00", "Z"))
         self._seq = 0
+        self._loop: asyncio.AbstractEventLoop | None = None
 
     def emit(
         self,
@@ -52,12 +53,23 @@ class EventStore:
         with self.path.open("a") as handle:
             handle.write(canonical_json(event.model_dump(mode="json")) + "\n")
         for queue in list(self._subscribers):
-            queue.put_nowait(event)
+            if self._loop is not None and self._loop.is_running():
+                self._loop.call_soon_threadsafe(queue.put_nowait, event)
+            else:
+                queue.put_nowait(event)
         return event
 
     @property
     def next_seq(self) -> int:
         return self._seq
+
+    def bind_loop(self, loop: asyncio.AbstractEventLoop) -> None:
+        """Runs execute on a worker thread; subscribers live on the event loop.
+
+        Binding the loop lets emit() hand events across the boundary safely instead of touching
+        asyncio primitives from the wrong thread.
+        """
+        self._loop = loop
 
     def subscribe(self) -> asyncio.Queue[RunEvent]:
         queue: asyncio.Queue[RunEvent] = asyncio.Queue()

@@ -1,52 +1,79 @@
-"""Phase 0 gate tests: the skeleton boots and every stub answers as specified."""
+"""API surface: health, run lifecycle, transport.
+
+Phase 0 asserted these endpoints were honest 501 stubs. They are implemented now, so these assert
+the real contract instead.
+"""
 
 from __future__ import annotations
 
-import pytest
+import json
+
 from fastapi.testclient import TestClient
 
 from backend.main import create_app
 
-
-@pytest.fixture
-def client() -> TestClient:
-    return TestClient(create_app())
+client = TestClient(create_app())
 
 
-def test_health_ok(client: TestClient) -> None:
+def test_health_reports_the_service_and_version() -> None:
     response = client.get("/api/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "service": "dhruva", "version": "0.1.0"}
+    body = response.json()
+    assert body["status"] == "ok"
+    assert body["service"] == "dhruva"
+    assert body["version"]
 
 
-def test_list_runs_empty(client: TestClient) -> None:
+def test_listing_runs_returns_a_list() -> None:
     response = client.get("/api/runs")
     assert response.status_code == 200
-    assert response.json() == []
+    assert isinstance(response.json(), list)
 
 
-def test_create_run_not_implemented(client: TestClient) -> None:
-    response = client.post("/api/runs", json={"mode": "supervised", "task": "demo"})
-    assert response.status_code == 501
-    assert "Phase 2/3" in response.json()["detail"]
+def test_unknown_run_is_a_404_not_a_500() -> None:
+    assert client.get("/api/runs/nope").status_code == 404
+    assert client.get("/api/runs/nope/events").status_code == 404
+    assert client.post("/api/runs/nope/inject", json={"scenario": "s1"}).status_code == 404
 
 
-def test_get_run_events_not_implemented(client: TestClient) -> None:
-    response = client.get("/api/runs/abc123/events")
-    assert response.status_code == 501
-    assert "Phase 2/3" in response.json()["detail"]
+def test_create_run_rejects_an_unknown_mode() -> None:
+    assert client.post("/api/runs", json={"mode": "sideways", "task": "loglens"}).status_code == 422
 
 
-def test_inject_not_implemented(client: TestClient) -> None:
-    response = client.post("/api/runs/abc123/inject", json={"scenario": "s1", "now": True})
-    assert response.status_code == 501
-    assert "Phase 2/3" in response.json()["detail"]
+def test_config_exposes_thresholds_and_models() -> None:
+    """The UI renders the dial's threshold marks from this, so it must not drift from the yaml."""
+    from backend.verifier import load_thresholds
+
+    body = client.get("/api/config").json()
+    thresholds = load_thresholds()
+    assert body["thresholds"]["breach"] == thresholds.breach
+    assert body["thresholds"]["warn"] == thresholds.warn
+    assert set(body["weights"]) == {"alignment", "repetition", "progress"}
+    assert body["models"]["agent"] and body["models"]["judge"]
+    assert body["models"]["agent"] != body["models"]["judge"], "mixed-provider by design"
 
 
-def test_websocket_hello_frame(client: TestClient) -> None:
-    with client.websocket_connect("/ws/runs/abc123") as websocket:
-        assert websocket.receive_json() == {
-            "type": "hello",
-            "run_id": "abc123",
-            "note": "stub",
-        }
+def test_scenarios_lists_all_three() -> None:
+    body = client.get("/api/scenarios").json()
+    assert {s["key"] for s in body} == {"s1", "s2", "s3"}
+
+
+def test_mock_runs_are_served_as_jsonl() -> None:
+    """The UI's offline fixture and the on-stage fallback."""
+    for name in ("happy", "breach"):
+        text = client.get(f"/api/mock/{name}").text
+        events = [json.loads(line) for line in text.splitlines() if line.strip()]
+        assert len(events) > 20
+        assert [e["seq"] for e in events] == list(range(len(events)))
+
+
+def test_unknown_mock_is_a_422() -> None:
+    assert client.get("/api/mock/nonsense").status_code == 422
+
+
+def test_websocket_attaches_and_reports_an_unknown_run() -> None:
+    with client.websocket_connect("/ws/runs/does-not-exist") as socket:
+        hello = socket.receive_json()
+        assert hello["type"] == "hello"
+        assert hello["run_id"] == "does-not-exist"
+        assert hello["note"] == "unknown run"
