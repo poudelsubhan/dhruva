@@ -108,9 +108,25 @@ the verifier is never grading the model family that produced the work.
 - Repository: https://github.com/poudelsubhan/dhruva
 - Demo video: _to be recorded_
 
+## Measured result
+
+Eviction is only worth claiming if it is *precise*. Three policies scored over the same event log,
+with the fixture's own `poisoned` flag as ground truth — identical on all three scenarios:
+
+| policy | kept | clean lost | contaminated kept |
+|---|---|---|---|
+| keep-all | 3 | 0 | **1** |
+| positional (evict the discarded range) | 1 | **1** | 0 |
+| **provenance (Dhruva)** | 2 | **0** | **0** |
+
+Positional eviction — which is what "rollback" means without provenance — destroys clean knowledge.
+Keep-all preserves it but carries the false belief forward. Provenance-based eviction is the only
+policy correct on both axes. Reproduce with `make measure`.
+
 ## Assets
 
-- [ ] `docs/assets/live-rollback.png` — live view mid-rollback, arc visible
+- [x] `docs/assets/live-rollback.png` — live view mid-rollback, arc visible
+- [x] `docs/assets/provenance-chain.png` — provenance graph with the hash chain and rollback edge
+- [x] `docs/assets/sample-screen.jpg` — the visual contract
 - [ ] `docs/assets/twin-decay.png` — supervised vs unsupervised decay curve
-- [ ] `docs/assets/provenance-chain.png` — checkpoint hash chain
 - [ ] `docs/assets/scenario-a.mp4` — 30–60s capture of scenario A end to end
