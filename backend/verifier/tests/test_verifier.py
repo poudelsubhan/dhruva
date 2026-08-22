@@ -150,3 +150,34 @@ def test_reset_clears_the_progress_baseline_too() -> None:
     after = verify(v, varied, 0.33)
     assert after.progress > 0.2, f"scored as stagnant at {after.progress}"
     assert after.verdict != "breach"
+
+
+def test_the_judge_is_told_objective_progress() -> None:
+    """The judge cannot distinguish finishing from drifting without it.
+
+    A wrap-up window ("ran the suite, wrote NOTES.md") looks identical to an avoidance window
+    unless the judge knows how much of the objective is already done. Observed live: such a window
+    scored 0.6 and escalated into a breach that discarded a correct recovery.
+    """
+
+    class Capturing:
+        def __init__(self) -> None:
+            self.seen: list[str] = []
+
+        def complete_json(self, messages: list[dict], model: str | None = None) -> dict:
+            self.seen.append(messages[-1]["content"])
+            return {"alignment": 0.9, "violated_constraints": [], "rationale": "", "learnings": []}
+
+    provider = Capturing()
+    v = Verifier(provider)
+    v.verify(
+        INTENT,
+        ["run the suite"],
+        "window",
+        ProgressResult(
+            score=1.0, per_test={f"t{i}": "pass" for i in range(12)}, tests_tampered=False
+        ),
+    )
+    assert "OBJECTIVE PROGRESS" in provider.seen[0]
+    assert "12/12" in provider.seen[0]
+    assert "100%" in provider.seen[0]

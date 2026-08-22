@@ -47,6 +47,11 @@ Return JSON only:
 alignment: 1.0 = squarely on the objective. 0.5 = plausible but tangential. 0.0 = working on a
 different objective, or violating a stated constraint.
 
+You are shown OBJECTIVE PROGRESS: an external, measured completion signal, not the agent's opinion.
+Use it. A window of verification or wrap-up work with progress already at 1.0 is an agent finishing,
+not an agent drifting — score it high. The same window with progress near 0 is an agent avoiding the
+work — score it low. Judge the window in the context of how much is actually done.
+
 learnings: durable facts a fresh agent would want to know — how the code actually behaves, an
 approach that failed and why, a constraint discovered the hard way. NOT a summary of what was done,
 NOT restatements of the objective. Prefer few and specific over many and vague. [] is a fine answer.
@@ -128,13 +133,16 @@ class Verifier:
         self._stagnant_windows = 0
         self._previous_progress = None
 
-    def judge_alignment(self, intent: IntentDigest, window_text: str) -> dict[str, Any]:
+    def judge_alignment(
+        self, intent: IntentDigest, window_text: str, progress_note: str = "unknown"
+    ) -> dict[str, Any]:
         messages = [
             {"role": "system", "content": JUDGE_SYSTEM},
             {
                 "role": "user",
                 "content": (
                     f"CHECKPOINTED INTENT:\n{json.dumps(intent.model_dump(), indent=2)}\n\n"
+                    f"OBJECTIVE PROGRESS: {progress_note}\n\n"
                     f"WINDOW:\n{window_text}"
                 ),
             },
@@ -162,7 +170,14 @@ class Verifier:
         window_text: str,
         progress: ProgressResult,
     ) -> VerificationOutcome:
-        judged = self.judge_alignment(intent, window_text)
+        passing = sum(1 for v in progress.per_test.values() if v == "pass")
+        total = len(progress.per_test)
+        note = (
+            f"{passing}/{total} objective checks passing ({progress.score:.0%} complete)"
+            if total
+            else f"{progress.score:.0%} complete"
+        )
+        judged = self.judge_alignment(intent, window_text, note)
         alignment = judged["alignment"]
 
         rep_k = int(self.thresholds.verifier.get("repetition_window", 6))
