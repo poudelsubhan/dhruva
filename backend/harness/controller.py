@@ -189,7 +189,14 @@ class RunController:
     # -- verification ---------------------------------------------------------
 
     def _window_open(self) -> bool:
-        return self.store.next_seq > self.window_start_seq
+        """True only if the window actually contains agent actions.
+
+        A window with no actions is not incoherent, it is empty -- but a judge shown an empty
+        transcript reasonably scores it near zero, which breaches and rolls back completed work.
+        This was observed live: a run finished its script, verified the leftover window, scored
+        0.155 on "the window shows no actions", and destroyed a correct implementation.
+        """
+        return any(e.type == "action" and e.seq >= self.window_start_seq for e in self.store.events)
 
     def _verify_window(self) -> None:
         self.state = RunState.VERIFYING

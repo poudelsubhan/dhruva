@@ -303,3 +303,28 @@ def test_learnings_from_passing_windows_reach_the_ledger(workdir: Path, tmp_path
     controller.run()
     assert controller.store.of_type("learning"), "a learning event must be emitted"
     assert controller.ledger.retrieve(), "and the entry must be retrievable"
+
+
+def test_an_empty_window_is_never_verified(workdir: Path, tmp_path: Path) -> None:
+    """A window with no actions is empty, not incoherent.
+
+    Observed live: a run finished its script, the controller verified the leftover window, the
+    judge scored 0.155 on "the window shows no actions", and the supervisor rolled back a correct
+    implementation. Judging an empty transcript is not a measurement.
+    """
+    steps = [ScriptedStep(text, "list_dir", {"path": "."}) for text in _DISTINCT[:5]]
+    controller = build(workdir, tmp_path, steps, [judge(0.95)] * 4)
+    controller.run()
+
+    verifications = controller.store.of_type("verification")
+    actions = controller.store.of_type("action")
+    assert len(actions) == 5
+
+    # Exactly one window closes: the cadence boundary at step 5. The exhausted-script path must
+    # not add a second, empty one.
+    assert len(verifications) == 1, [v.payload["window"] for v in verifications]
+
+    for verification in verifications:
+        low, high = verification.payload["window"]
+        in_window = [a for a in actions if low <= a.seq <= high]
+        assert in_window, f"window {[low, high]} contains no actions"
