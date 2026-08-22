@@ -111,6 +111,28 @@ class RollbackController:
 
         controller.task_pack.restore(target.snapshot, controller.workdir)
 
+        # Drop every checkpoint minted after the target. They describe a trajectory that has just
+        # been discarded, and leaving them in the chain lets a later passing window CONFIRM one --
+        # making a snapshot taken inside the corruption a valid future rollback target. Observed
+        # live: a second breach rolled back to a checkpoint minted after the injection, restoring
+        # the very state the first rollback had removed, and the run ended at 8/12.
+        index = controller.checkpointer.chain.index(target)
+        discarded_checkpoints = controller.checkpointer.chain[index + 1 :]
+        if discarded_checkpoints:
+            del controller.checkpointer.chain[index + 1 :]
+            controller.store.emit(
+                "memory_op",
+                {
+                    "op": "write",
+                    "detail": (
+                        "invalidated "
+                        + ", ".join(c.id for c in discarded_checkpoints)
+                        + " — minted inside the discarded range"
+                    ),
+                },
+                checkpoint_ref=target.id,
+            )
+
         # A real agent re-plans from the rebuilt context and naturally redoes the discarded work.
         # A scripted one needs its cursor moved back, or the run resumes with nothing left to do
         # and reports a partial result as success.

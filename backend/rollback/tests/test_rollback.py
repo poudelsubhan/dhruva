@@ -307,3 +307,30 @@ def test_preflight_ref_always_points_at_a_verification(workdir: Path, tmp_path: 
     for resume in resumes:
         ref = resume.payload["preflight_verification_ref"]
         assert by_seq[ref].type == "verification", f"seq {ref} is a {by_seq[ref].type}"
+
+
+def test_checkpoints_after_the_target_are_invalidated(workdir: Path, tmp_path: Path) -> None:
+    """A discarded trajectory's checkpoints must not survive to become future targets.
+
+    Observed live: a passing window after recovery confirmed a checkpoint that had been minted
+    after the injection, so a second breach rolled back INTO the corruption the first rollback had
+    just removed.
+    """
+    controller = build(
+        workdir, tmp_path, drift_script(), [0.95, 0.95, 0.95, 0.02, 0.95, 0.95, 0.95]
+    )
+    controller.run()
+
+    rollbacks = controller.store.of_type("rollback")
+    assert rollbacks
+    target_id = rollbacks[0].payload["target_checkpoint_id"]
+    ids = [c.id for c in controller.checkpointer.chain]
+    target_index = ids.index(target_id)
+
+    # Anything minted after the target during the discarded range is gone; only checkpoints
+    # created after the resume may appear beyond it.
+    _, discarded_high = rollbacks[0].payload["discarded_range"]
+    for checkpoint in controller.checkpointer.chain[target_index + 1 :]:
+        assert checkpoint.seq_range[0] > discarded_high, (
+            f"{checkpoint.id} was minted inside the discarded range and survived"
+        )
