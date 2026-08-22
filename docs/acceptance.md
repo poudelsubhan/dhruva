@@ -157,6 +157,15 @@ The unsupervised arm is not blind — it computes coherence identically and reco
 simply never intervenes, so the drifting agent's rewritten public API stands and every test fails.
 That is the control arm doing its job: it makes the supervised result evidence rather than assertion.
 
+`docs/assets/twin-decay.png` shows it in one frame: both curves decay identically until the
+intervention, then the supervised curve snaps back while the unsupervised one never recovers.
+
+**On the half-life number specifically:** both arms cross C = 0.5 at almost the same point
+(49.6 vs 50.1), and that is expected rather than disappointing. The injection lands at the same step
+in both, so *onset* of decay is identical by construction. What separates the arms is recovery, not
+onset — which is what the curve shows and what the final scores measure. The half-life is the
+plan's specified metric and is computed correctly; it simply is not the discriminating one here.
+
 ## Reproducing
 
 ```bash

@@ -135,6 +135,22 @@ export default function App() {
     }
   }
 
+  async function openRun(run: RunSummary) {
+    // A twin is a pair, so opening either member must restore the comparison rather than a single
+    // track. Without this a completed twin is unreachable once the page reloads.
+    if (run.twin_id) {
+      const pair = runs.filter((r) => r.twin_id === run.twin_id)
+      const sup = pair.find((r) => r.mode === 'supervised')
+      const uns = pair.find((r) => r.mode === 'unsupervised')
+      if (sup && uns) {
+        setSource({ kind: 'twin', supervised: sup.run_id, unsupervised: uns.run_id })
+        setTwin({ supervised: [], unsupervised: [] })
+        return
+      }
+    }
+    return openReplay(run.run_id)
+  }
+
   async function openReplay(runId: string) {
     setBusy(true)
     try {
@@ -385,11 +401,12 @@ export default function App() {
                 <button
                   key={r.run_id}
                   type="button"
-                  onClick={() => openReplay(r.run_id)}
+                  onClick={() => openRun(r)}
                   className="flex flex-wrap items-center gap-gutter rounded-mark border border-edge-subtle px-3 py-2 text-left font-mono text-micro text-ink-secondary hover:border-edge-strong"
                 >
                   <span className="text-ink-primary">{r.run_id}</span>
                   <span>{r.mode}</span>
+                  {r.twin_id ? <span className="text-coherence-400">twin</span> : null}
                   {r.scenario ? <span className="text-state-warn">{r.scenario}</span> : null}
                   <span>{r.state}</span>
                   <span>{r.events} events</span>

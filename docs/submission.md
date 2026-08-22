@@ -140,5 +140,5 @@ policy correct on both axes. Reproduce with `make measure`.
 - [x] `docs/assets/live-rollback.png` — live view mid-rollback, arc visible
 - [x] `docs/assets/provenance-chain.png` — provenance graph with the hash chain and rollback edge
 - [x] `docs/assets/sample-screen.jpg` — the visual contract
-- [ ] `docs/assets/twin-decay.png` — supervised vs unsupervised decay curve
+- [x] `docs/assets/twin-decay.png` — supervised vs unsupervised decay curve
 - [ ] `docs/assets/scenario-a.mp4` — 30–60s capture of scenario A end to end
