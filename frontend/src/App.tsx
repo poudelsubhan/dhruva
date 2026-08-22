@@ -173,6 +173,8 @@ export default function App() {
 
   const allEvents = source?.kind === 'live' ? stream.events : staticEvents
   const isCanned = source?.kind === 'canned'
+  // What the header pill reports is what you are LOOKING AT, not whether a key is configured.
+  const isStatic = source?.kind === 'canned' || source?.kind === 'mock' || source?.kind === 'replay'
   const playback = usePlayback(isCanned ? allEvents : [], 60_000)
   const maxSeq = allEvents.length ? allEvents[allEvents.length - 1].seq : 0
   const shown = useMemo(() => {
@@ -321,11 +323,11 @@ export default function App() {
         <div className="flex flex-wrap items-center gap-tight">
           {config ? (
             <>
-              <Pill tone={config.live_provider ? 'ok' : 'warn'}>
-                {config.live_provider ? 'live provider' : 'mock provider'}
+              <Pill tone={isStatic ? 'idle' : config.live_provider ? 'ok' : 'warn'}>
+                {isStatic ? 'replaying a recorded run' : config.live_provider ? 'live provider' : 'mock provider'}
               </Pill>
               <span className="font-mono text-micro text-ink-muted">
-                agent {config.models.agent} · judge {config.models.judge}
+                agent scripted · judge {config.models.judge}
               </span>
             </>
           ) : (
@@ -338,7 +340,7 @@ export default function App() {
         <section className="flex flex-wrap items-end gap-gutter rounded-panel border border-edge-default bg-base-800 p-panel">
           <div className="flex flex-col gap-tight">
             <span className="font-mono text-micro tracking-[0.18em] text-ink-muted uppercase">
-              scenario
+              next run · scenario
             </span>
             <div className="flex flex-wrap gap-tight">
               {SCENARIOS.map((s) => (
@@ -350,7 +352,7 @@ export default function App() {
                   className={clsx(
                     'rounded-mark border px-3 py-2 text-left font-mono text-micro transition-colors',
                     scenario === s.key
-                      ? 'border-coherence-400 text-ink-primary'
+                      ? 'border-ink-muted bg-base-700 text-ink-primary'
                       : 'border-edge-default text-ink-muted hover:border-edge-strong',
                   )}
                 >
@@ -378,7 +380,7 @@ export default function App() {
               type="button"
               disabled={busy}
               onClick={() => launch(true)}
-              className="rounded-mark border border-coherence-400 px-4 py-2 font-mono text-micro tracking-[0.14em] text-coherence-400 uppercase transition-colors hover:bg-coherence-400/10 disabled:opacity-40"
+              className="rounded-mark border border-ink-primary bg-ink-primary px-4 py-2 font-mono text-micro tracking-[0.14em] text-ink-inverse uppercase transition-colors hover:bg-ink-secondary hover:border-ink-secondary disabled:opacity-40"
             >
               run with scenario
             </button>
@@ -409,7 +411,7 @@ export default function App() {
             <button
               type="button"
               onClick={() => openCanned('s1-supervised')}
-              className="rounded-mark border border-coherence-400 px-4 py-2 font-mono text-micro tracking-[0.14em] text-coherence-400 uppercase hover:bg-coherence-400/10"
+              className="rounded-mark border border-edge-default px-4 py-2 font-mono text-micro tracking-[0.14em] text-ink-secondary uppercase transition-colors hover:border-edge-strong"
             >
               demo replay
             </button>
@@ -430,11 +432,11 @@ export default function App() {
         ) : null}
 
         {isCanned && allEvents.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-gutter rounded-panel border border-coherence-400/40 bg-base-800 px-panel py-snug">
+          <div className="flex flex-wrap items-center gap-gutter rounded-panel border border-edge-default bg-base-800 px-panel py-snug">
             <button
               type="button"
               onClick={playback.toggle}
-              className="rounded-mark border border-coherence-400 px-4 py-2 font-mono text-micro tracking-[0.14em] text-coherence-400 uppercase hover:bg-coherence-400/10"
+              className="rounded-mark border border-edge-default px-4 py-2 font-mono text-micro tracking-[0.14em] text-ink-secondary uppercase transition-colors hover:border-edge-strong"
             >
               {playback.playing ? '❚❚ pause' : '▶ play'}
             </button>
@@ -451,12 +453,12 @@ export default function App() {
               max={Math.max(0, allEvents.length - 1)}
               value={playback.index}
               onChange={(e) => playback.seek(Number(e.target.value))}
-              className="h-1 min-w-40 flex-1 accent-coherence-400"
+              className="h-1 min-w-40 flex-1 accent-ink-secondary"
             />
             <span className="font-mono text-micro text-ink-muted">
               {playback.index + 1}/{allEvents.length}
             </span>
-            <span className="font-mono text-micro tracking-[0.14em] text-coherence-400 uppercase">
+            <span className="font-mono text-micro tracking-[0.14em] text-ink-secondary uppercase">
               {beatLabel(shown)}
             </span>
             <span className="font-mono text-micro text-ink-muted">space · R</span>
@@ -472,7 +474,7 @@ export default function App() {
               max={maxSeq}
               value={scrub ?? maxSeq}
               onChange={(e) => setScrub(Number(e.target.value))}
-              className="h-1 flex-1 accent-coherence-400"
+              className="h-1 flex-1 accent-ink-secondary"
             />
             <span className="w-24 text-right font-mono text-micro text-ink-muted">
               seq {scrub ?? maxSeq}/{maxSeq}
@@ -497,7 +499,7 @@ export default function App() {
                 className={clsx(
                   'rounded-mark border px-3 py-1 font-mono text-micro tracking-[0.14em] uppercase',
                   view === v
-                    ? 'border-coherence-400 text-coherence-400'
+                    ? 'border-ink-primary text-ink-primary'
                     : 'border-edge-default text-ink-muted hover:border-edge-strong',
                 )}
               >
@@ -544,7 +546,7 @@ export default function App() {
                 >
                   <span className="text-ink-primary">{r.run_id}</span>
                   <span>{r.mode}</span>
-                  {r.twin_id ? <span className="text-coherence-400">twin</span> : null}
+                  {r.twin_id ? <span className="text-ink-secondary">twin</span> : null}
                   {r.scenario ? <span className="text-state-warn">{r.scenario}</span> : null}
                   <span>{r.state}</span>
                   <span>{r.events} events</span>
