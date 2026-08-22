@@ -385,7 +385,7 @@ def build() -> Path:
 
     # 6 — the measured claim
     s = blank(prs)
-    kicker(s, "THE CLAIM, MEASURED")
+    kicker(s, "MEASUREMENTS")
     text(
         s,
         Inches(0.9),
