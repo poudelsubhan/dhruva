@@ -1,74 +1,105 @@
 # Dhruva
 
-**Dhruva** is a framework-agnostic supervisor for long-horizon agents. It wraps an agent loop,
-checkpoints goal-state, watches for semantic drift, and — when the agent's behaviour stops matching
-its own objective — rolls it back to the last verified checkpoint, re-injects the intent, forces a
-pre-flight re-verification, and resumes. Every action, observation, memory op, verification,
-checkpoint, breach, rollback, resume, and injection is emitted as a schema-valid event, and the whole
-run is rendered in a web-based flight recorder: a live timeline with a streaming coherence score, a
-temporal provenance graph, side-by-side supervised/unsupervised twins with a decay curve and computed
-coherence half-life, and scrubbable replay. Three adapter seams — the wrapped agent, the model
-provider, and the demo task — keep it bindable to whatever the day demands.
+A framework-agnostic supervisor that wraps an agent loop, checkpoints goal-state, detects semantic
+drift, and rolls the agent back to its last verified checkpoint — **without destroying what it
+learned along the way.** Rendered as a web flight recorder: live timeline, streaming coherence score,
+checkpoint chain, knowledge ledger, and scrubbable replay.
+
+Built for Long Horizon Agents Build Day · AGI House · Aug 22, 2026.
 
 ## Quickstart
 
 ```bash
-make install     # uv sync --all-groups + npm ci in frontend/
-cp .env.example .env   # then fill in your key (see Configuration)
-make dev         # boots both servers; Ctrl-C stops both
+make install          # uv sync + npm ci
+cp .env.example .env  # then add your OPENAI_API_KEY (any OpenAI-compatible endpoint)
+make dev              # backend :8000, frontend :5173
 ```
 
-- Frontend: <http://localhost:5173>
-- Backend: <http://localhost:8000> (health: `/api/health`)
+Open http://localhost:5173, pick a scenario, and hit **run with scenario**.
 
-The Vite dev server proxies `/api` and `/ws` to the backend on port 8000, so the frontend talks to
-one origin.
+No API key? Everything still runs — the provider falls back to a mock, and `make demo-mock` serves
+pre-recorded logs through the same UI.
 
-Other entrypoints: `make dev-backend`, `make dev-frontend`, `make test`, `make lint`,
-`make typecheck`, `make check`, `make build`, `make clean`, `make demo-mock`. `make help` lists them.
+```bash
+make check                                   # lint + typecheck + tests (backend and frontend)
+uv run python scripts/demo_scenario.py --scenario s2   # one scenario end to end, offline
+uv run python scripts/mock_run.py            # regenerate the mock logs
+```
+
+## What it does
+
+Every N steps the supervisor compresses the task into an **intent digest** (objective, constraints
+verbatim, done-criteria, open subgoals), snapshots the working tree, and hash-chains the pair into a
+checkpoint. Each window is scored:
+
+```
+C = 0.6·alignment + 0.2·repetition + 0.2·progress
+```
+
+Alignment is one judge call. Repetition is pairwise Levenshtein over recent actions — loop detection
+with no model call. Progress is an external objective signal (passing tests / total). Two of three
+terms are arithmetic, which is what makes runs reproducible.
+
+On breach the supervisor restores the tree from the last **confirmed** checkpoint, audits the
+knowledge ledger, rebuilds the agent's context from the digest (the poisoned history is never
+replayed), verifies the agent's *proposed* next step before letting it act, and resumes.
+
+### The part that is actually novel
+
+Work state and knowledge are separated. The tree reverts; **verified learnings do not.** Anything
+whose provenance traces to a poisoned observation or an injected instruction is evicted, and
+everything else is carried into the rebuilt context — along with an explicit note about what was
+discarded and why, which is itself an anti-drift signal.
+
+The audit is deterministic and synchronous. No model call sits on the rollback path.
 
 ## Layout
 
-```
-dhruva/
-├── backend/          FastAPI app — harness, checkpointer, verifier, injector, providers, transport
-├── frontend/         Vite + React + TypeScript + Tailwind — the flight recorder UI
-├── shared/schema/    JSON Schemas for the event/checkpoint contracts (source of the generated types)
-├── fixtures/         Demo task repo, corruption scenario fixtures, canned run logs
-├── config/           Tunable surfaces — thresholds and run configuration
-├── scripts/          Developer tooling — mock run generator, WS replayer, codegen
-├── docs/             Submission draft, ownership map, traceability, acceptance checklist
-├── runs/             Per-run event logs (JSONL) and snapshots — gitignored
-└── Makefile          Every developer entrypoint
-```
+| path | what lives there |
+|---|---|
+| `shared/schema/` | canonical JSON Schemas — Python and TypeScript both derive from these |
+| `backend/contracts/` | typed mirrors, canonical JSON, the hash chain, the three adapter seams |
+| `backend/harness/` | run controller state machine, append-only event store |
+| `backend/verifier/` | composite coherence, judge call, verdict and escalation |
+| `backend/checkpoint/` | intent compression, hash-chained minting, integrity walk |
+| `backend/ledger/` | knowledge admission, taint audit, cross-run carryover |
+| `backend/rollback/` | restore → audit → context rebuild → pre-flight → resume |
+| `backend/inject/` | the three corruption scenarios |
+| `backend/tasks/` | the `loglens` TaskPack |
+| `fixtures/task_repo/` | the demo task: 12 failing tests over 3 independent groups |
+| `frontend/src/` | tokens, core components, data layer, flight-recorder views |
+| `config/thresholds.yaml` | the single tuning surface |
+| `docs/build-decisions.md` | decisions more than one task depends on, and why |
 
 ## Configuration
 
-Copy `.env.example` to `.env` and fill it in. `.env` is gitignored and must never be committed.
+All in `.env` (gitignored; `.env.example` lists the names):
 
-| Key | Purpose |
-| --- | --- |
-| `DHRUVA_PROVIDER` | Selects the model-provider implementation. `openai_compat` uses the OpenAI-compatible client below. |
-| `OPENAI_BASE_URL` | Base URL of the OpenAI-compatible endpoint. Defaults to OpenRouter; point it anywhere that speaks the same API. |
-| `OPENAI_API_KEY` | Credential for `OPENAI_BASE_URL`. |
-| `OPENROUTER_API_KEY` | OpenRouter credential, when the endpoint is OpenRouter specifically. |
+| key | meaning |
+|---|---|
+| `DHRUVA_PROVIDER` | provider strategy; `openai_compat` today |
+| `OPENAI_BASE_URL` | any OpenAI-compatible endpoint (default: OpenRouter) |
+| `OPENAI_API_KEY` | key for that endpoint |
 
-Models are pinned in code, not in env: agent `anthropic/claude-sonnet-5`, judge `openai/gpt-5-mini`,
-compressor `openai/gpt-5-mini`. Running the judge on a different provider than the wrapped agent is
-by design.
+Model ids live in `backend/config.py`. The default pairing runs the agent on
+`anthropic/claude-sonnet-5` and the judge on `openai/gpt-5-mini` — deliberately different families,
+so the verifier is never grading the model that produced the work.
 
-No secret is required to run the test suite or CI — everything exercised there is mocked or stubbed.
+## Design notes
 
-## Architecture
+Two properties are load-bearing and easy to lose:
 
-A run controller drives the wrapped agent through three seams: `AgentAdapter` (step, inject
-messages, get/set context), `ModelProvider` (one OpenAI-compatible `complete` call), and `TaskPack`
-(spec, tools, snapshot/restore, progress). Every N steps the verifier scores the action window
-against the checkpointed intent digest; a passing score mints a hash-chained checkpoint, a breaching
-one triggers rollback. Events are append-only JSONL on disk and are broadcast over
-`/ws/runs/{id}` — the disk log and the socket carry identical objects, so live view and replay share
-one render path. Phase 7 expands this section.
+**The event log is the single source of truth.** The JSONL line on disk and the WebSocket frame are
+byte-identical objects, so replay renders through the same code path as live rather than through a
+second renderer that can drift.
+
+**Ground truth is protected from the scenario that attacks it.** Progress is measured by running the
+test suite, and scenario S3's corruption *is* an edit to the test suite. So progress counts only
+twelve canonical test ids and hash-verifies every test file against a shipped baseline. Tampering
+breaches immediately — an invalid measurement, not a low one.
 
 ## Status
 
-**Phase 0 — scaffold.** Repo, CI, and dev stack only; the mechanisms above land in Phases 1–4.
+Phases 0–3 complete. Three scenarios run injection → breach → rollback → resume → 12/12, each
+producing byte-identical traces across two consecutive runs. 104 backend tests, 67 frontend tests,
+ruff/mypy/oxlint/tsc clean.

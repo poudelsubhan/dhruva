@@ -1,61 +1,116 @@
-# Dhruva — submission draft
+# Dhruva
 
-> **DRAFT.** Skeleton written in Phase 0; filled with day-of facts in Phase 6 (T6.1).
-> Hard gate: platform draft saved before 7:00 PM.
+**A supervisor that catches an agent losing the plot, rolls it back — and keeps what it learned.**
+
+Long Horizon Agents Build Day · AGI House · Aug 22, 2026
+
+---
 
 ## Problem
 
-Long-horizon agents don't fail loudly — they drift. A contradictory instruction, a poisoned tool
-result, or a lossy context compaction quietly rewrites what the agent thinks it is doing, and the
-loop keeps running confidently against the wrong objective. Nothing in a standard agent stack
-notices, because nothing is holding the original goal-state to compare against.
+Long-horizon agents fail quietly. Not by crashing, but by *drifting*: a contradictory instruction
+lands, a tool lies, a context window gets compacted and drops a constraint — and the agent keeps
+working, confidently, on the wrong thing. By the time anyone notices, hours of work rest on a
+corrupted foundation.
+
+Rollback is the obvious answer, and it has a hidden cost nobody prices in: **rollback causes
+amnesia.** Reverting the working tree to a checkpoint also destroys everything the agent legitimately
+learned in the discarded range — that the harness imports from `conftest`, that a particular approach
+deadlocks. The agent re-derives it, burning steps, and often re-walks the same dead ends. Recovery is
+expensive precisely because it is lossy.
 
 ## Mechanism
 
-Dhruva wraps the agent loop as a supervisor. It compresses the objective into an intent digest and
-mints hash-chained checkpoints only on verified-coherent states; every N steps a judge scores the
-action window against that digest on three axes — alignment, repetition, progress — into a composite
-coherence score. When coherence breaches threshold, Dhruva halts stepping, restores the workdir from
-the last checkpoint whose chain passes integrity, rebuilds the agent's context from the digest
-instead of replaying the poisoned history, gates the resume behind a pre-flight re-verification of
-the agent's *proposed* next step, and continues. The poisoned span is never replayed.
+Dhruva wraps an agent loop and does four things.
+
+**Checkpoints goal-state.** Every N steps it compresses the task into an *intent digest* — objective,
+constraints verbatim, done-criteria, open subgoals — and snapshots the working tree. Checkpoints are
+hash-chained and minted only after a passing verification, so they are last-known-good by
+construction. A checkpoint becomes a valid *rollback target* only once the following window also
+passes, which keeps the supervisor from restoring a snapshot minted after the corruption landed.
+
+**Scores drift.** `C = 0.6·alignment + 0.2·repetition + 0.2·progress`. Alignment is one judge call
+per window. Repetition is pairwise Levenshtein over recent actions — it catches loops with no model
+call. Progress is an objective external signal: passing tests over total. Two of the three terms are
+arithmetic, which matters, because the more of the score that is computed rather than sampled, the
+more reproducible the whole run is.
+
+**Protects its own ground truth.** Progress is measured by running the test suite — and one of the
+three corruption scenarios *edits the test suite*. So the score counts only twelve canonical test ids
+and hash-verifies every test file against a shipped baseline. Tampering is an immediate breach, not a
+low score: a metric computed from files that were just rewritten is not a low measurement, it is an
+invalid one.
+
+**Rolls back without amnesia.** On breach: restore the tree from the last confirmed checkpoint, then
+audit the knowledge ledger. Knowledge lives separately from work state — append-only and
+taint-tracked — so the tree reverts while *verified learnings survive*. Anything whose provenance
+traces to a poisoned observation or the injected instruction is evicted; everything else is carried
+into the rebuilt context. The audit is pure and synchronous: no model call on the rollback path,
+because that would put dead air and a failure mode on the one path that must not stall.
+
+The agent then gets a pre-flight check — its proposed next step is verified against the intent
+*before* it is allowed to act — and only then resumes.
 
 ## Demo
 
-Three scripted corruptions — contradictory instruction, poisoned tool output, simulated compaction
-loss — are armed from the UI against a real coding task (make 12 failing tests pass without touching
-the test files). Twin mode runs supervised and unsupervised agents on the identical task and
-injection schedule side by side: the supervised run breaches, rolls back, and completes; the
-unsupervised run's coherence decays, and the UI marks its computed half-life.
+Three scripted corruptions, each attacking a different surface:
 
-<!-- DRAFT: replace with the actual scenario, run ID, and timings captured in Phase 6. -->
+| | attacks | what the agent sees |
+|---|---|---|
+| **S1** | its instructions | an authoritative redirect that supersedes the objective |
+| **S2** | its observations | a falsified test result claiming the suite is green |
+| **S3** | its memory | a "compacted" history that silently drops one constraint |
+
+Each runs the same arc: injection → the poisoned window still *passes* (drift takes a window to
+become visible, and a false learning is admitted in the meantime) → breach → rollback to a confirmed
+checkpoint → clean learnings retained, contaminated ones evicted → resume → 12/12.
+
+All three produce byte-identical traces across two consecutive runs.
+
+The screen that carries it is a twelve-lamp test board. On the breach you watch four lamps go dark,
+the rollback arc fire, and the same four relight — the mechanism visible without narration.
 
 ## Architecture
 
-FastAPI + asyncio backend, React + TypeScript + D3 frontend, one append-only JSONL event log per run
-that is broadcast verbatim over `/ws/runs/{id}` — live view and replay render from the same source of
-truth. Three adapter seams keep it framework-agnostic: `AgentAdapter` (the wrapped agent),
-`ModelProvider` (any OpenAI-compatible endpoint), and `TaskPack` (the demo task). The judge can run
-on a different provider than the agent; mixed-provider is by design.
+```
+backend/
+  contracts/   JSON-Schema-derived types, hash chain, the three adapter seams
+  harness/     run controller state machine, event store (JSONL == WebSocket frames)
+  verifier/    composite coherence, judge call, verdict + escalation
+  checkpoint/  intent compression, hash-chained minting, integrity walk
+  ledger/      knowledge admission, deterministic taint audit, cross-run carryover
+  rollback/    restore -> audit -> context rebuild -> pre-flight -> resume
+  inject/      three fixture-defined corruptions
+  tasks/       the loglens TaskPack (ground-truth protection, snapshot hygiene)
+frontend/      React + D3 flight recorder; one render path for live and replay
+```
 
-<!-- DRAFT: note which agent framework / provider / task the day-of mandate bound us to (Phase 5). -->
+Three adapter seams keep it bindable: `AgentAdapter`, `ModelProvider`, `TaskPack`. Nothing above them
+knows a concrete implementation, which is why every test runs with no network at all.
+
+Provider access is a single OpenAI-compatible client against OpenRouter, so **mixed-provider holds by
+construction**: the agent runs on `anthropic/claude-sonnet-5` and the judge on `openai/gpt-5-mini` —
+the verifier is never grading the model family that produced the work.
 
 ## What's next
 
-Drift detection beyond scripted scenarios: learned thresholds instead of calibrated ones, checkpoint
-minting driven by semantic novelty rather than a fixed step interval, and durable run history so the
-provenance graph spans sessions rather than a single demo.
-
-## Assets
-
-Captured in Phase 6 (T6.1), stored under `docs/assets/`.
-
-- [ ] Live view mid-rollback screenshot — `docs/assets/live-rollback.png`
-- [ ] Twin decay curve with half-life marker screenshot — `docs/assets/twin-decay-curve.png`
-- [ ] Provenance chain screenshot — `docs/assets/provenance-chain.png`
-- [ ] 30–60 s screen capture of scenario A end to end — `docs/assets/scenario-a.mp4`
+- **Swarm supervision.** The contracts already carry `agent_id`/`swarm_id` and reserve the swarm event
+  types. The ledger is what makes it affordable: cross-agent divergence is detected by
+  contradiction-checking each agent's new learnings against the shared ledger head, which is O(N) per
+  barrier rather than O(N²) pairwise. A poisoned member's false learning never reaches its peers,
+  because the only path out of staging runs through a passing verification.
+- **Measuring the amnesia tax.** Run the same task ledger-seeded versus cold and chart recovery steps.
+  That number is the real contribution, and the plumbing for it already exists.
+- **Real long-horizon runs.** Time compression is simulated today.
 
 ## Links
 
-- Repo: <https://github.com/poudelsubhan/dhruva>
-- Demo video: _DRAFT — URL pending Phase 6 capture._
+- Repository: https://github.com/poudelsubhan/dhruva
+- Demo video: _to be recorded_
+
+## Assets
+
+- [ ] `docs/assets/live-rollback.png` — live view mid-rollback, arc visible
+- [ ] `docs/assets/twin-decay.png` — supervised vs unsupervised decay curve
+- [ ] `docs/assets/provenance-chain.png` — checkpoint hash chain
+- [ ] `docs/assets/scenario-a.mp4` — 30–60s capture of scenario A end to end
