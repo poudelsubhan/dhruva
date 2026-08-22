@@ -93,9 +93,15 @@ class ScriptedAgentAdapter:
         With ``recovery_steps`` the agent switches to the re-planned path instead of replaying the
         steps that drifted; without them it simply redoes the discarded range.
         """
-        if self.recovery_steps is not None:
+        if self.recovery_steps is not None and self.recoveries == 0:
             handle.steps = list(self.recovery_steps)
             handle.cursor = 0
             self.recoveries += 1
             return
-        handle.cursor = max(0, cursor)
+
+        # Only switch to the recovery path ONCE. Restarting it on every rollback makes the agent
+        # re-implement work it has already finished -- identical actions, repeatedly -- which the
+        # repetition term correctly reads as a loop, breaching and rolling back the very work that
+        # just succeeded. A real agent does not redo completed work; it continues from where it is.
+        self.recoveries += 1
+        handle.cursor = max(0, min(cursor, len(handle.steps)))
