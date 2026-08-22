@@ -150,3 +150,38 @@ detect late: the **Phase 1 contract freeze** and the **Phase 3 rollback controll
 build + one verifier. Rationale: a Phase 2 module that comes back wrong is cheap to re-run, so paying
 triple to pre-verify it is bad economics against a 7 PM gate. This is a deliberate change from how Phase 0
 was run.
+
+## D11 — Three bugs that only a live judge could find
+
+Every unit test in this build uses a mocked provider, which is correct: it keeps the suite fast,
+free, and deterministic. But a mock returns a scripted alignment **regardless of what the window
+actually contains**, so an empty window looks identical to a full one, and a looping agent looks
+identical to a productive one. Three demo-breaking defects were invisible to 186 passing tests and
+surfaced within minutes of watching a real judge score real windows:
+
+1. **Verifying an empty window.** When the agent's script ran out, the controller verified the
+   leftover window — which contained no actions. The judge reasonably returned alignment 0.1 with
+   the rationale *"the window shows no actions"*. That breached, rolled back a completed
+   implementation, and dropped a run from 12/12 to 8/12 while reporting itself done.
+   *Fix:* `_window_open()` requires at least one action in range. An empty window is not incoherent.
+
+2. **A stale progress baseline after rollback.** A rollback restores an earlier tree, so progress
+   legitimately drops — but the verifier kept comparing against the pre-rollback high-water mark,
+   scoring a correctly-recovering agent as stagnant. A recovery window with alignment 0.85 was
+   dragged to a warn by progress 0.2, and two such windows escalated into a spurious breach.
+   *Fix:* `reset_escalation()` clears `_previous_progress` too.
+
+3. **A recovery path that restarted on every rollback.** The scripted agent re-implemented work it
+   had already finished, identical actions repeatedly, which the repetition term correctly read as
+   a loop — breaching and discarding the work that had just succeeded.
+   *Fix:* take the recovery path once, then resume in place.
+
+**The pattern worth carrying forward:** none of the three was a supervisor bug. The supervisor
+scored exactly what it was shown — an empty transcript, a stale baseline, a genuine loop. Every fix
+was to stop showing it something misleading. Two of the three were the same underlying mistake:
+**state that outlived the trajectory it described.** If the swarm tier is ever built, that is the
+first thing to audit, because a swarm multiplies the number of trajectories that can end.
+
+**Practical consequence:** mocked tests verify mechanism; they cannot verify *judgement under real
+input*. Budget time to watch live runs before a demo, and read the judge's rationale strings rather
+than only its scores — all three of these were diagnosed from the rationale, not the number.
