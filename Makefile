@@ -9,7 +9,7 @@ FRONTEND_PORT ?= 5173
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install dev dev-backend dev-frontend test lint typecheck check build clean demo-mock
+.PHONY: help install dev dev-backend dev-frontend test lint typecheck check build clean demo-mock demo demo-all
 
 help:
 	@echo ""
@@ -25,7 +25,9 @@ help:
 	@echo "    check         lint + typecheck + test"
 	@echo "    build         production build of the frontend"
 	@echo "    clean         remove caches, dist, and run artifacts"
-	@echo "    demo-mock     boot the stack against mock runs (Phase 1)"
+	@echo "    demo-mock     regenerate the mock run logs"
+	@echo "    demo          one scenario end to end, offline (SCENARIO=s1|s2|s3)"
+	@echo "    demo-all      all three scenarios twice; proves determinism"
 	@echo ""
 
 install:
@@ -91,4 +93,15 @@ clean:
 	@echo "  clean: caches, dist, and runs/* removed (runs/.gitkeep kept)"
 
 demo-mock:
-	@echo "Phase 1 delivers the mock replayer"
+	uv run python scripts/mock_run.py --out fixtures/mock
+
+demo:
+	uv run python scripts/demo_scenario.py --scenario $(or $(SCENARIO),s2)
+
+demo-all:
+	@for s in s1 s2 s3; do \
+		a=$$(uv run python scripts/demo_scenario.py --scenario $$s 2>&1 | grep -vE 'log:|events:' | sed 's/[0-9a-f]\{16\}/ID/g'); \
+		b=$$(uv run python scripts/demo_scenario.py --scenario $$s 2>&1 | grep -vE 'log:|events:' | sed 's/[0-9a-f]\{16\}/ID/g'); \
+		if [ "$$a" = "$$b" ]; then echo "  $$s: deterministic across two consecutive runs"; \
+		else echo "  $$s: DIVERGED"; exit 1; fi; \
+	done

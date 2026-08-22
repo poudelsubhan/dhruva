@@ -46,14 +46,15 @@ The `loglens` fixture: 12 failing tests over 3 independent module groups, ~20 ag
 - `::test_a_failing_preflight_halts_after_retrying`
 - Arc rendered by `TimelineTrack`; visible in `docs/assets/live-rollback.png`.
 
-### 6. Twin mode: supervised vs unsupervised, decay curve, half-life ⚠️ partial
+### 6. Twin mode: supervised vs unsupervised, decay curve, half-life ✅
 
-- Backend: `POST /api/runs {mode: "twin"}` spawns a linked pair on an identical schedule;
-  `test_unsupervised_mode_scores_but_never_intervenes` proves the control arm scores drift and
-  records breaches without intervening.
-- Half-life: `coherenceHalfLife()` implemented and unit-covered in `frontend/src/data/derive.ts`.
-- **Not done:** the side-by-side twin *view*. The data and the endpoint exist; the two-track screen
-  does not.
+- `POST /api/runs {mode: "twin"}` spawns a linked pair on an identical task and injection schedule
+- `test_unsupervised_mode_scores_but_never_intervenes` — the control arm scores drift and records
+  the breach without intervening, which is what makes the comparison evidence rather than assertion
+- `frontend/src/views/twin/TwinView.tsx` — overlaid decay curves on a shared x-domain, interventions
+  marked, half-life rendered as an annotated marker
+- `TwinView.test.tsx` — 7 tests covering the interpolation, a curve that never crosses 0.5, and the
+  first-crossing-not-last case
 
 ### 7. Replay scrubs a completed run from the same event log the live view renders ✅
 
@@ -94,6 +95,7 @@ which is what makes this reproducible rather than merely usually-repeatable.
 
 ### 11. Knowledge carries across runs; the recovery delta is measured ⚠️ partial
 
+
 - Carryover implemented and covered: `::test_seeding_decays_confidence_and_refuses_tainted_rows`
   — only `clean` rows cross a run boundary, and they enter at `confidence × 0.8` so stale knowledge
   fades rather than ossifies. `task_start.seeded_learnings` records the count.
@@ -109,9 +111,26 @@ event types, glyphs drawn. Per the v3 tiering rule this was scoped as a projecte
 and cut when the clock said the base demo mattered more. Nothing in Phases 0–3 imports it, so the cut
 is clean.
 
-**Provenance graph view (T2.7)** and **twin view (T2.8)**. The derived data both need is implemented
-in `frontend/src/data/derive.ts`; the screens are not built.
+Nothing else was cut. The provenance graph (T2.7) and twin view (T2.8) both landed.
+
+### Provenance graph (T2.7) ✅
+
+`frontend/src/views/graph/GraphView.tsx` — time-layered DAG, x by seq, y by lane. Fixed computed
+layout rather than a force simulation, with a test asserting two renders place nodes identically:
+a graph that wobbles cannot be pointed at while talking. Edges cover action → observation,
+observation → learning, the checkpoint hash chain, and the rollback back to what it restored.
+7 tests in `GraphView.test.tsx`.
+
+## Reproducing
+
+```bash
+make check      # 104 backend tests, 82 frontend tests, ruff/mypy/oxlint/tsc
+make demo-all   # all three scenarios twice; proves criterion 8
+make dev        # the flight recorder at localhost:5173
+```
 
 ## Totals
 
-104 backend tests · 67 frontend tests · ruff, mypy, oxlint, tsc all clean.
+104 backend tests · 82 frontend tests · ruff, mypy, oxlint, tsc all clean.
+9 of 11 acceptance criteria fully met; criterion 11 partial (carryover works, the
+seeded-vs-cold measurement has not been run).
