@@ -130,3 +130,23 @@ def test_a_judge_failure_does_not_kill_the_run() -> None:
     out = verify(v, ["read ingest", "write analytics"], 0.5)
     assert out.alignment == 0.5
     assert "judge unavailable" in out.rationale
+
+
+def test_reset_clears_the_progress_baseline_too() -> None:
+    """A rollback lowers progress by design; the old high-water mark must not survive it.
+
+    Without this, a correctly-recovering agent is scored as stagnant: its restored tree has less
+    progress than the trajectory that was just discarded.
+    """
+    v = Verifier(FixedJudge(0.85))
+    varied = ["read the ingest module", "check the failing assertions", "open the query module"]
+
+    verify(v, varied, 0.33)
+    verify(v, varied, 0.67)  # baseline now 0.67
+
+    v.reset_escalation()
+
+    # Post-rollback the tree is back at 0.33. That is a restore, not stagnation.
+    after = verify(v, varied, 0.33)
+    assert after.progress > 0.2, f"scored as stagnant at {after.progress}"
+    assert after.verdict != "breach"

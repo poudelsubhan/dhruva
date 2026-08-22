@@ -116,9 +116,17 @@ class Verifier:
         self._previous_progress: float | None = None
 
     def reset_escalation(self) -> None:
-        """Called after a rollback: the warn streak belongs to the discarded trajectory."""
+        """Called after a rollback. Everything reset here belongs to the discarded trajectory.
+
+        The progress BASELINE matters as much as the warn streak. A rollback restores an earlier
+        tree, so progress legitimately drops -- and comparing the rebuilt state against the
+        pre-rollback high-water mark scores a correctly-recovering agent as stagnant. Observed
+        live: a recovery window with alignment 0.85 was dragged to a warn by progress 0.2, and two
+        such windows escalated into a breach that discarded correct work.
+        """
         self._consecutive_warns = 0
         self._stagnant_windows = 0
+        self._previous_progress = None
 
     def judge_alignment(self, intent: IntentDigest, window_text: str) -> dict[str, Any]:
         messages = [
