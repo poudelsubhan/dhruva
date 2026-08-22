@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dhruva.dev/schema/ledger_entry.schema.json",
+  "title": "LedgerEntry",
+  "description": "One accumulated learning. Knowledge is append-only and taint-tracked, separate from work state: on rollback the workdir reverts but clean knowledge is retained.",
+  "type": "object",
+  "required": ["id", "run_id", "kind", "text", "confidence", "source_seqs", "minted_at_seq", "status", "scope"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string", "pattern": "^[0-9a-f]{16}$",
+      "description": "sha256(canonical_json({run_id, minted_at_seq, kind, text_normalized}))[:16]. Computed over IMMUTABLE fields only, so an entry's id survives every status change."
+    },
+    "run_id": { "type": "string" },
+    "agent_id": { "type": ["string", "null"], "default": null },
+    "kind": { "enum": ["fact", "constraint", "failed_approach", "resource", "api_shape"] },
+    "text": { "type": "string", "maxLength": 240, "description": "One assertion, <=30 words." },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "source_seqs": {
+      "type": "array", "items": { "type": "integer", "minimum": 0 }, "minItems": 1,
+      "description": "Events this was derived from. Intersecting poison_seqs is what makes taint exact rather than guessed."
+    },
+    "minted_at_seq": { "type": "integer", "minimum": 0 },
+    "checkpoint_ref": { "type": ["string", "null"], "default": null },
+    "status": {
+      "enum": ["clean", "suspect", "evicted"],
+      "description": "MUTABLE — outside the id and outside every hash."
+    },
+    "status_reason": { "type": ["string", "null"], "default": null },
+    "supersedes": { "type": ["string", "null"], "default": null },
+    "superseded_by": { "type": ["string", "null"], "default": null },
+    "uses": {
+      "type": "array", "default": [],
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["at_seq"],
+        "properties": {
+          "agent_id": { "type": ["string", "null"], "default": null },
+          "at_seq": { "type": "integer", "minimum": 0 }
+        }
+      },
+      "description": "Every injection of this entry into a context. Enables exact taint closure."
+    },
+    "scope": {
+      "enum": ["run", "task_pack"],
+      "description": "task_pack entries persist to fixtures/<pack>/ledger.jsonl on a successful run and seed the next run at confidence * 0.8."
+    },
+    "admitted_from_verdict": {
+      "enum": ["pass", "warn", "breach"],
+      "description": "v3: failed_approach entries are admitted from ANY verdict at halved confidence. Pass-only admission is anti-correlated with value — a window verdicts incoherent precisely when 'this approach fails' is true and most worth keeping."
+    }
+  }
+}

@@ -1,4 +1,4 @@
-"""Group B — session reconstruction (loglens/sessions.py)."""
+"""Group B — session reconstruction (loglens/analytics.py)."""
 
 from __future__ import annotations
 
@@ -34,8 +34,8 @@ def test_summarize_sessions_counts_errors_and_distinct_paths(make_event):
 
     assert [summary.session_id for summary in summaries] == ["s-2", "s-1"]
 
-    first_session = summaries[1]
-    assert first_session.request_count == 3
-    assert first_session.error_count == 2
-    assert first_session.distinct_paths == 2
-    assert first_session.duration_s == 30.0
+    second_summary = summaries[1]
+    assert second_summary.request_count == 3
+    assert second_summary.error_count == 2
+    assert second_summary.distinct_paths == 2
+    assert second_summary.duration_s == 30.0

@@ -1,0 +1,57 @@
+"""Frozen contracts. Everything downstream imports types from here, never redefines them."""
+
+from backend.contracts.hashing import (
+    canonical_json,
+    checkpoint_hash,
+    genesis_parent_hash,
+    ledger_entry_id,
+    normalize_text,
+)
+from backend.contracts.models import (
+    EVENT_TYPES,
+    ActionPayload,
+    BreachPayload,
+    Checkpoint,
+    CheckpointPayload,
+    IntentDigest,
+    LearningPayload,
+    LedgerAuditPayload,
+    LedgerEntry,
+    ObservationPayload,
+    ProgressResult,
+    RollbackPayload,
+    RunEvent,
+    Snapshot,
+    TaskStartPayload,
+    VerificationPayload,
+)
+from backend.contracts.seams import AgentAdapter, ModelProvider, StepResult, TaskPack, ToolDef
+
+__all__ = [
+    "EVENT_TYPES",
+    "ActionPayload",
+    "AgentAdapter",
+    "BreachPayload",
+    "Checkpoint",
+    "CheckpointPayload",
+    "IntentDigest",
+    "LearningPayload",
+    "LedgerAuditPayload",
+    "LedgerEntry",
+    "ModelProvider",
+    "ObservationPayload",
+    "ProgressResult",
+    "RollbackPayload",
+    "RunEvent",
+    "Snapshot",
+    "StepResult",
+    "TaskPack",
+    "TaskStartPayload",
+    "ToolDef",
+    "VerificationPayload",
+    "canonical_json",
+    "checkpoint_hash",
+    "genesis_parent_hash",
+    "ledger_entry_id",
+    "normalize_text",
+]

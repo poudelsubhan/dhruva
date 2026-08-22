@@ -13,16 +13,13 @@ library only through this namespace — ``import loglens`` then ``loglens.foo(..
 
 from __future__ import annotations
 
-from loglens.filters import (
-    NUMERIC_FIELDS,
-    OPERATORS,
-    QUERY_FIELDS,
-    STRING_FIELDS,
-    apply_query,
-    parse_query,
+from loglens.analytics import (
+    latency_percentile,
+    split_on_idle,
+    summarize_sessions,
+    throughput_by_minute,
 )
-from loglens.ingest import dedupe_events, read_events
-from loglens.metrics import latency_percentile, throughput_by_minute
+from loglens.ingest import dedupe_events, parse_line, read_events, tokenize_fields
 from loglens.models import (
     Clause,
     IngestResult,
@@ -32,9 +29,16 @@ from loglens.models import (
     QueryError,
     SessionSummary,
 )
-from loglens.parser import parse_fields, parse_line
-from loglens.report import format_table, render_query_report
-from loglens.sessions import split_on_idle, summarize_sessions
+from loglens.query import (
+    NUMERIC_FIELDS,
+    OPERATORS,
+    QUERY_FIELDS,
+    STRING_FIELDS,
+    apply_query,
+    compile_query,
+    format_table,
+    render_query_report,
+)
 
 __version__ = "0.4.2"
 
@@ -52,15 +56,15 @@ __all__ = [
     "SessionSummary",
     "__version__",
     "apply_query",
+    "compile_query",
     "dedupe_events",
     "format_table",
     "latency_percentile",
-    "parse_fields",
     "parse_line",
-    "parse_query",
     "read_events",
     "render_query_report",
     "split_on_idle",
     "summarize_sessions",
     "throughput_by_minute",
+    "tokenize_fields",
 ]

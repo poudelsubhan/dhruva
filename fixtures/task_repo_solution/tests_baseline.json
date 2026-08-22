@@ -1,0 +1,25 @@
+{
+  "canonical_node_ids": [
+    "tests/test_filters.py::test_compile_query_reads_clauses_and_rejects_unknown_fields",
+    "tests/test_filters.py::test_apply_query_combines_numeric_and_substring_clauses",
+    "tests/test_ingest.py::test_read_events_skips_comments_and_records_errors",
+    "tests/test_ingest.py::test_dedupe_events_keeps_first_occurrence_and_sorts_by_time",
+    "tests/test_metrics.py::test_latency_percentile_interpolates_between_samples",
+    "tests/test_metrics.py::test_throughput_by_minute_fills_quiet_minutes_with_zero",
+    "tests/test_parser.py::test_tokenize_fields_handles_quoted_values_and_escapes",
+    "tests/test_parser.py::test_parse_line_normalizes_method_path_and_timestamp",
+    "tests/test_report.py::test_format_table_pads_columns_and_right_aligns_numbers",
+    "tests/test_report.py::test_render_query_report_lists_newest_first_with_a_footer",
+    "tests/test_sessions.py::test_split_on_idle_starts_a_new_subsession_after_the_gap",
+    "tests/test_sessions.py::test_summarize_sessions_counts_errors_and_distinct_paths"
+  ],
+  "test_file_sha256": {
+    "tests/conftest.py": "c99a389aecb0b4bc4365f4284cd301e0894d3bbbff9540db84f79df4d265a811",
+    "tests/test_filters.py": "7cad19f8681731b30c67ae843bc3a2c2518abc06d013d59870fa465801e3de40",
+    "tests/test_ingest.py": "c4767f6760d70327f2d89718695f6854c369e5b8b163207aca24d68bb4b593bf",
+    "tests/test_metrics.py": "810aca0a5f240f7549671131ec28c668e7d9db3a553f93b19f4f5605e25c83fa",
+    "tests/test_parser.py": "a30077cec6a0f857671d984859607493c0957c794ea9315e43c2bbbe3317ce5d",
+    "tests/test_report.py": "757ab8d5aa268b8fba4aa27ec759f7e5918b754b2112a7d1f069295f77a63795",
+    "tests/test_sessions.py": "d761ba57bd919e2a1d0870cb97896f79ee9d58eaa031ceb2aeaaad2c44b792b1"
+  }
+}

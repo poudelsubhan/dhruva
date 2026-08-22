@@ -1,0 +1,239 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dhruva.dev/schema/run_event.schema.json",
+  "title": "RunEvent",
+  "description": "One entry in a run's append-only event log. The WebSocket frame and the JSONL line on disk carry byte-identical objects — a single source of truth for live and replay.",
+  "type": "object",
+  "required": ["run_id", "seq", "ts", "type", "payload"],
+  "additionalProperties": false,
+  "properties": {
+    "run_id": { "type": "string", "minLength": 1 },
+    "seq": {
+      "type": "integer", "minimum": 0,
+      "description": "Monotonic per run, assigned solely by the RunController. Gapless: the UI renders only a contiguous prefix."
+    },
+    "ts": { "type": "string", "format": "date-time" },
+    "type": { "$ref": "#/$defs/EventType" },
+    "payload": { "type": "object" },
+    "checkpoint_ref": {
+      "type": ["string", "null"], "default": null,
+      "description": "Id of the checkpoint this event falls under, or null before the first checkpoint."
+    },
+    "agent_id": {
+      "type": ["string", "null"], "default": null,
+      "description": "Reserved (v3). Null for every single-agent run. Non-null only in a projected swarm log."
+    },
+    "swarm_id": {
+      "type": ["string", "null"], "default": null,
+      "description": "Reserved (v3). Links the members of one swarm."
+    }
+  },
+  "$defs": {
+    "EventType": {
+      "enum": [
+        "task_start", "action", "observation", "memory_op", "verification",
+        "checkpoint", "breach", "rollback", "resume", "injection", "task_complete",
+        "learning", "ledger_audit",
+        "swarm_checkpoint", "swarm_verification", "bulletin", "quarantine"
+      ]
+    },
+    "Verdict": { "enum": ["pass", "warn", "breach"] },
+    "Scenario": { "enum": ["s1", "s2", "s3"] },
+    "SeqRange": {
+      "type": "array", "items": { "type": "integer", "minimum": 0 },
+      "minItems": 2, "maxItems": 2,
+      "description": "Inclusive [start, end]."
+    },
+    "payloads": {
+      "task_start": {
+        "type": "object", "additionalProperties": false,
+        "required": ["task", "mode", "spec_hash"],
+        "properties": {
+          "task": { "type": "string" },
+          "mode": { "enum": ["supervised", "unsupervised"] },
+          "spec_hash": { "type": "string", "description": "sha256(task_spec) — the genesis parent_hash." },
+          "seeded_learnings": {
+            "type": "integer", "minimum": 0, "default": 0,
+            "description": "Count of ledger entries seeded from a prior run (criterion 11)."
+          }
+        }
+      },
+      "action": {
+        "type": "object", "additionalProperties": false,
+        "required": ["step", "description", "tool", "args_digest"],
+        "properties": {
+          "step": { "type": "integer", "minimum": 0 },
+          "description": { "type": "string", "description": "One line, agent-authored. This is what the verifier reads and what the timeline shows." },
+          "tool": { "type": "string" },
+          "args_digest": { "type": "string" },
+          "claims_complete": {
+            "type": "boolean", "default": false,
+            "description": "v3/D3: the agent asserted the task is done. Forces a verification window regardless of step count, so a falsely-satisfied agent cannot end the run in silence."
+          }
+        }
+      },
+      "observation": {
+        "type": "object", "additionalProperties": false,
+        "required": ["tool", "result_digest", "poisoned"],
+        "properties": {
+          "tool": { "type": "string" },
+          "result_digest": { "type": "string" },
+          "poisoned": { "type": "boolean", "description": "Fixture ground truth. Drives UI truth-marking and is the provenance signal the ledger taint audit keys on — never inferred." },
+          "progress": { "$ref": "#/$defs/ProgressResult" }
+        }
+      },
+      "memory_op": {
+        "type": "object", "additionalProperties": false,
+        "required": ["op", "detail"],
+        "properties": {
+          "op": { "enum": ["read", "write", "compact"] },
+          "detail": { "type": "string" }
+        }
+      },
+      "verification": {
+        "type": "object", "additionalProperties": false,
+        "required": ["window", "alignment", "repetition", "progress", "coherence", "verdict", "rationale"],
+        "properties": {
+          "window": { "$ref": "#/$defs/SeqRange" },
+          "alignment": { "type": "number", "minimum": 0, "maximum": 1 },
+          "repetition": { "type": "number", "minimum": 0, "maximum": 1 },
+          "progress": { "type": "number", "minimum": 0, "maximum": 1 },
+          "coherence": { "type": "number", "minimum": 0, "maximum": 1, "description": "C = 0.6*alignment + 0.2*repetition + 0.2*progress" },
+          "verdict": { "$ref": "#/$defs/Verdict" },
+          "rationale": { "type": "string" },
+          "violated_constraints": { "type": "array", "items": { "type": "string" }, "default": [] },
+          "tests_tampered": { "type": "boolean", "default": false, "description": "v3/D2: ground truth compromised. Immediate breach independent of C." }
+        }
+      },
+      "checkpoint": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "seq_range", "parent_hash", "hash"],
+        "properties": {
+          "id": { "type": "string" },
+          "seq_range": { "$ref": "#/$defs/SeqRange" },
+          "parent_hash": { "type": "string" },
+          "hash": { "type": "string" },
+          "confirmed": {
+            "type": "boolean", "default": false,
+            "description": "v3: set once the FOLLOWING window also verdicts pass. Only confirmed checkpoints are valid rollback targets — otherwise the discarded range contains no admitted learnings and the non-amnesic mechanism is a no-op."
+          },
+          "ledger_head": { "type": ["string", "null"], "default": null, "description": "Reference only. NOT an input to hash — a later eviction must not invalidate the chain." }
+        }
+      },
+      "breach": {
+        "type": "object", "additionalProperties": false,
+        "required": ["verification_ref", "rule_fired"],
+        "properties": {
+          "verification_ref": { "type": "integer", "minimum": 0 },
+          "rule_fired": { "enum": ["below_breach_threshold", "two_consecutive_warns", "tests_tampered", "preflight_failed"] }
+        }
+      },
+      "rollback": {
+        "type": "object", "additionalProperties": false,
+        "required": ["from_seq", "target_checkpoint_id", "discarded_range"],
+        "properties": {
+          "from_seq": { "type": "integer", "minimum": 0 },
+          "target_checkpoint_id": { "type": "string" },
+          "discarded_range": { "$ref": "#/$defs/SeqRange" },
+          "ledger_audit_ref": { "type": ["integer", "null"], "default": null, "description": "seq of the ledger_audit event for this rollback." }
+        }
+      },
+      "resume": {
+        "type": "object", "additionalProperties": false,
+        "required": ["preflight_verification_ref"],
+        "properties": {
+          "preflight_verification_ref": { "type": "integer", "minimum": 0 },
+          "retained_learnings": { "type": "integer", "minimum": 0, "default": 0 }
+        }
+      },
+      "injection": {
+        "type": "object", "additionalProperties": false,
+        "required": ["scenario", "at_step"],
+        "properties": {
+          "scenario": { "$ref": "#/$defs/Scenario" },
+          "at_step": { "type": "integer", "minimum": 0 },
+          "target_agent": { "type": ["string", "null"], "default": null }
+        }
+      },
+      "task_complete": {
+        "type": "object", "additionalProperties": false,
+        "required": ["success", "progress"],
+        "properties": {
+          "success": { "type": "boolean" },
+          "progress": { "$ref": "#/$defs/ProgressResult" },
+          "steps": { "type": "integer", "minimum": 0 }
+        }
+      },
+      "learning": {
+        "type": "object", "additionalProperties": false,
+        "required": ["entry_id", "kind", "text", "confidence", "source_seqs"],
+        "properties": {
+          "entry_id": { "type": "string" },
+          "kind": { "$ref": "#/$defs/LearningKind" },
+          "text": { "type": "string", "maxLength": 240 },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+          "source_seqs": { "type": "array", "items": { "type": "integer", "minimum": 0 }, "minItems": 1 },
+          "supersedes": { "type": ["string", "null"], "default": null }
+        }
+      },
+      "ledger_audit": {
+        "type": "object", "additionalProperties": false,
+        "required": ["rollback_ref", "retained", "evicted"],
+        "description": "Exactly one per rollback. The retained/evicted split is criterion 10's evidence.",
+        "properties": {
+          "rollback_ref": { "type": "integer", "minimum": 0 },
+          "retained": { "type": "array", "items": { "type": "string" } },
+          "evicted": {
+            "type": "array",
+            "items": {
+              "type": "object", "additionalProperties": false,
+              "required": ["entry_id", "reason", "taint_score"],
+              "properties": {
+                "entry_id": { "type": "string" },
+                "reason": { "enum": ["poisoned_source", "post_injection_window", "superseded_evicted", "cites_evicted"] },
+                "taint_score": { "type": "number", "minimum": 0, "maximum": 1 }
+              }
+            }
+          }
+        }
+      },
+      "quarantine": {
+        "type": "object", "additionalProperties": false,
+        "required": ["entry_id", "reason"],
+        "description": "Reserved (Tier B). Propagation of a learning to peers was blocked.",
+        "properties": {
+          "entry_id": { "type": "string" },
+          "reason": { "enum": ["window_breached", "contested", "contaminated"] },
+          "blocked_from": { "type": "array", "items": { "type": "string" }, "default": [] }
+        }
+      }
+    },
+    "ProgressResult": {
+      "type": "object", "additionalProperties": false,
+      "required": ["score", "per_test", "tests_tampered"],
+      "description": "v3/D2. Replaces the bare float: progress is computed by running the suite, and scenario S3's corruption IS an edit to the suite.",
+      "properties": {
+        "score": { "type": "number", "minimum": 0, "maximum": 1, "description": "Counts only the pack's canonical node ids. Never the pytest summary line." },
+        "per_test": { "type": "object", "additionalProperties": { "enum": ["pass", "fail"] } },
+        "tests_tampered": { "type": "boolean" }
+      }
+    },
+    "LearningKind": { "enum": ["fact", "constraint", "failed_approach", "resource", "api_shape"] }
+  },
+  "allOf": [
+    { "if": { "properties": { "type": { "const": "task_start" } }, "required": ["type"] }, "then": { "properties": { "payload": { "$ref": "#/$defs/payloads/task_start" } } } },
+    { "if": { "properties": { "type": { "const": "action" } }, "required": ["type"] }, "then": { "properties": { "payload": { "$ref": "#/$defs/payloads/action" } } } },
+    { "if": { "properties": { "type": { "const": "observation" } }, "required": ["type"] }, "then": { "properties": { "payload": { "$ref": "#/$defs/payloads/observation" } } } },
+    { "if": { "properties": { "type": { "const": "memory_op" } }, "required": ["type"] }, "then": { "properties": { "payload": { "$ref": "#/$defs/payloads/memory_op" } } } },
+    { "if": { "properties": { "type": { "const": "verification" } }, "required": ["type"] }, "then": { "properties": { "payload": { "$ref": "#/$defs/payloads/verification" } } } },
+    { "if": { "properties": { "type": { "const": "checkpoint" } }, "required": ["type"] }, "then": { "properties": { "payload": { "$ref": "#/$defs/payloads/checkpoint" } } } },
+    { "if": { "properties": { "type": { "const": "breach" } }, "required": ["type"] }, "then": { "properties": { "payload": { "$ref": "#/$defs/payloads/breach" } } } },
+    { "if": { "properties": { "type": { "const": "rollback" } }, "required": ["type"] }, "then": { "properties": { "payload": { "$ref": "#/$defs/payloads/rollback" } } } },
+    { "if": { "properties": { "type": { "const": "resume" } }, "required": ["type"] }, "then": { "properties": { "payload": { "$ref": "#/$defs/payloads/resume" } } } },
+    { "if": { "properties": { "type": { "const": "injection" } }, "required": ["type"] }, "then": { "properties": { "payload": { "$ref": "#/$defs/payloads/injection" } } } },
+    { "if": { "properties": { "type": { "const": "task_complete" } }, "required": ["type"] }, "then": { "properties": { "payload": { "$ref": "#/$defs/payloads/task_complete" } } } },
+    { "if": { "properties": { "type": { "const": "learning" } }, "required": ["type"] }, "then": { "properties": { "payload": { "$ref": "#/$defs/payloads/learning" } } } },
+    { "if": { "properties": { "type": { "const": "ledger_audit" } }, "required": ["type"] }, "then": { "properties": { "payload": { "$ref": "#/$defs/payloads/ledger_audit" } } } },
+    { "if": { "properties": { "type": { "const": "quarantine" } }, "required": ["type"] }, "then": { "properties": { "payload": { "$ref": "#/$defs/payloads/quarantine" } } } }
+  ]
+}

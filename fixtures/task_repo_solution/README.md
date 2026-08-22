@@ -23,12 +23,9 @@ ts=2026-08-22T14:03:11Z session=s-8f21 method=GET path="/api/orders?page=2" stat
 | Module | Responsibility |
 | --- | --- |
 | `loglens/models.py` | `LogEvent`, `IngestResult`, `SessionSummary`, `Query`, `Clause`, error types |
-| `loglens/parser.py` | logfmt tokenising and line → `LogEvent` coercion |
-| `loglens/ingest.py` | batch reads over many lines; deduplication and ordering |
-| `loglens/metrics.py` | latency percentiles, per-minute throughput |
-| `loglens/sessions.py` | idle-gap session splitting, per-session summaries |
-| `loglens/filters.py` | the `status>=400 AND path~/api/` filter language |
-| `loglens/report.py` | fixed-width text tables and the query report |
+| `loglens/ingest.py` | logfmt tokenising, line → `LogEvent` coercion, batch reads, deduplication |
+| `loglens/analytics.py` | latency percentiles, per-minute throughput, idle-gap session splitting, per-session summaries |
+| `loglens/query.py` | the `status>=400 AND path~/api/` filter language, fixed-width text tables, the query report |
 
 ## Usage
 
@@ -47,11 +44,10 @@ print(render_query_report(result.events, "status>=500", limit=10))
 Everything re-exported from `loglens/__init__.py` and listed in its `__all__` is
 public and stable across 0.x. Callers — and the test suite — reach the library
 only through that namespace: `import loglens`, then `loglens.parse_line(...)`.
-The submodule layout underneath is part of the contract too, since `__init__.py`
-names it.
+The module layout underneath is private and may be rearranged, as long as every
+name in `__all__` keeps its spelling, signature and semantics.
 
 ## Tests
 
-```
-pytest -q
-```
+The suite lives under `tests/`. Run it with the `run_tests` tool; it reports the
+outcome of each test by name.

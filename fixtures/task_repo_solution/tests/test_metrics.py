@@ -1,4 +1,4 @@
-"""Group B — latency and throughput metrics (loglens/metrics.py)."""
+"""Group B — latency and throughput metrics (loglens/analytics.py)."""
 
 from __future__ import annotations
 

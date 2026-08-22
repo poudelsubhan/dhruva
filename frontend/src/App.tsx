@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { fetchHealth, type HealthResponse } from './lib/health'
+import { SampleScreen } from './screens/sample/SampleScreen'
 
 const POLL_MS = 3000
 
@@ -80,13 +81,71 @@ function StatusPill({ state, health }: HealthState) {
   )
 }
 
+type View = 'shell' | 'sample'
+
+/** Dev toggle between the Phase 0 shell and T1.2's composed sample screen. */
+function ViewToggle({ view, onChange }: { view: View; onChange: (next: View) => void }) {
+  const options: Array<[View, string]> = [
+    ['shell', 'shell'],
+    ['sample', 'sample'],
+  ]
+
+  return (
+    <div
+      role="group"
+      aria-label="View"
+      className="inline-flex items-center gap-hair rounded-pill border border-edge-default bg-base-800 p-hair"
+    >
+      {options.map(([value, label]) => (
+        <button
+          key={value}
+          type="button"
+          onClick={() => onChange(value)}
+          aria-pressed={view === value}
+          className={`rounded-pill px-snug py-tick font-mono text-micro tracking-[0.16em] uppercase ${
+            view === value
+              ? 'bg-base-500 text-ink-primary'
+              : 'text-ink-muted hover:text-ink-secondary'
+          }`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 export default function App() {
   const { state, health } = useHealth()
+  const [view, setView] = useState<View>('shell')
+
+  if (view === 'sample') {
+    return (
+      <div className="min-h-screen w-full bg-base-900">
+        <header className="flex flex-wrap items-center justify-between gap-gutter border-b border-edge-default bg-base-950 px-bay py-gutter">
+          <div className="flex items-baseline gap-snug">
+            <span className="text-title font-semibold tracking-tight text-ink-primary">
+              Dhruva
+            </span>
+            <span className="font-mono text-micro tracking-[0.2em] text-ink-muted uppercase">
+              flight recorder · visual contract
+            </span>
+          </div>
+          <div className="flex items-center gap-gutter">
+            <StatusPill state={state} health={health} />
+            <ViewToggle view={view} onChange={setView} />
+          </div>
+        </header>
+        <SampleScreen />
+      </div>
+    )
+  }
 
   return (
     <div className="flex min-h-screen w-full flex-col justify-between bg-zinc-950 px-8 py-10 text-zinc-100">
-      <header className="font-mono text-xs tracking-widest text-zinc-600 uppercase">
-        phase 0 — scaffold
+      <header className="flex items-center justify-between gap-6 font-mono text-xs tracking-widest text-zinc-600 uppercase">
+        <span>phase 0 — scaffold</span>
+        <ViewToggle view={view} onChange={setView} />
       </header>
 
       <main className="flex flex-col items-start gap-6">

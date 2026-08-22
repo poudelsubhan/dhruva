@@ -1,4 +1,4 @@
-"""Group A — logfmt line parsing (loglens/parser.py)."""
+"""Group A — logfmt line parsing (loglens/ingest.py)."""
 
 from __future__ import annotations
 
@@ -8,10 +8,10 @@ import loglens
 import pytest
 
 
-def test_parse_fields_handles_quoted_values_and_escapes():
+def test_tokenize_fields_handles_quoted_values_and_escapes():
     line = r'ts=2026-08-22T14:03:11Z path="/api/orders?q=a b" note="say \"hi\"" status=200'
 
-    assert loglens.parse_fields(line) == {
+    assert loglens.tokenize_fields(line) == {
         "ts": "2026-08-22T14:03:11Z",
         "path": "/api/orders?q=a b",
         "note": 'say "hi"',
@@ -19,10 +19,10 @@ def test_parse_fields_handles_quoted_values_and_escapes():
     }
 
     with pytest.raises(loglens.LogParseError):
-        loglens.parse_fields('ts=2026-08-22T14:03:11Z path="/never-closed')
+        loglens.tokenize_fields('ts=2026-08-22T14:03:11Z path="/never-closed')
 
     with pytest.raises(loglens.LogParseError):
-        loglens.parse_fields("this line is not logfmt")
+        loglens.tokenize_fields("this line is not logfmt")
 
 
 def test_parse_line_normalizes_method_path_and_timestamp():

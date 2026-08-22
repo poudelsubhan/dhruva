@@ -10,9 +10,9 @@ import type { EventType } from '../../components/core'
  *   RunEvent { run_id, seq (monotonic), ts, type, payload, checkpoint_ref }
  *
  * The run: two clean windows and two checkpoints, an S1 contradictory-instruction
- * injection at seq 17, a poisoned observation, coherence decaying 0.94 -> 0.41
- * across five verification windows, a breach, a rollback to ckpt-02 (seq 15),
- * a ledger audit, pre-flight re-verification, recovery, and completion.
+ * injection at seq 17, two poisoned observations, coherence decaying 0.94 -> 0.41
+ * across five verification windows, a breach at seq 29, a rollback to ckpt-02
+ * (seq 16), a ledger audit, pre-flight re-verification, recovery, completion.
  */
 
 export type VerificationPayload = {
@@ -95,7 +95,7 @@ function verification(
     verdict,
     rationale,
   }
-  return ev(seq, 'verification', payload as unknown as Record<string, unknown>)
+  return ev(seq, 'verification', payload)
 }
 
 function checkpoint(seq: number, id: string, range: [number, number], parent: string): RunEvent {
@@ -105,8 +105,11 @@ function checkpoint(seq: number, id: string, range: [number, number], parent: st
     parent_hash: parent,
     hash: `sha256:${id}9d4`,
   }
-  return ev(seq, 'checkpoint', payload as unknown as Record<string, unknown>, id)
+  return ev(seq, 'checkpoint', payload, id)
 }
+
+const breach = (payload: BreachPayload): BreachPayload => payload
+const rollback = (payload: RollbackPayload): RollbackPayload => payload
 
 export const SAMPLE_RUN: RunEvent[] = [
   ev(1, 'task_start', {
@@ -160,11 +163,11 @@ export const SAMPLE_RUN: RunEvent[] = [
   ),
 
   // ── supervisor intervenes ────────────────────────────────────────────────
-  ev(29, 'breach', { verification_ref: 28, rule_fired: 'C < theta_breach' } as BreachPayload as unknown as Record<string, unknown>),
+  ev(29, 'breach', breach({ verification_ref: 28, rule_fired: 'C < theta_breach' })),
   ev(
     30,
     'rollback',
-    { from_seq: 29, target_checkpoint_id: 'ckpt-02', discarded_range: [17, 29] } as RollbackPayload as unknown as Record<string, unknown>,
+    rollback({ from_seq: 29, target_checkpoint_id: 'ckpt-02', discarded_range: [17, 29] }),
     'ckpt-02',
   ),
   ev(31, 'ledger_audit', { retained: 1, evicted: 2, checkpoint_id: 'ckpt-02' }, 'ckpt-02'),
@@ -196,4 +199,4 @@ export const SAMPLE_CHECKPOINTS = [
 /** Coherence series in emission order — the gauge sparkline and the decay curve. */
 export const SAMPLE_COHERENCE: number[] = SAMPLE_RUN.filter(
   (event) => event.type === 'verification',
-).map((event) => (event.payload as unknown as VerificationPayload).coherence)
+).map((event) => (event.payload as VerificationPayload).coherence)

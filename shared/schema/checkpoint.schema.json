@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dhruva.dev/schema/checkpoint.schema.json",
+  "title": "Checkpoint",
+  "description": "A last-known-good state. Minted only after a passing verification, so checkpoints are verified-coherent by construction.",
+  "type": "object",
+  "required": ["id", "run_id", "seq_range", "intent_digest", "snapshot", "parent_hash", "hash", "verified"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string" },
+    "run_id": { "type": "string" },
+    "seq_range": { "type": "array", "items": { "type": "integer", "minimum": 0 }, "minItems": 2, "maxItems": 2 },
+    "intent_digest": { "$ref": "#/$defs/IntentDigest" },
+    "snapshot": { "$ref": "#/$defs/Snapshot" },
+    "parent_hash": { "type": "string", "description": "Genesis is sha256(task_spec)." },
+    "hash": {
+      "type": "string",
+      "description": "sha256(parent_hash + canonical_json(intent_digest) + canonical_json(snapshot.file_hashes) + str(seq_range)). Canonical JSON = sorted keys, no whitespace, UTF-8. ledger_head is deliberately NOT an input."
+    },
+    "verified": { "const": true },
+    "confirmed": {
+      "type": "boolean", "default": false,
+      "description": "v3: true once the window AFTER this checkpoint also verdicts pass. Only confirmed checkpoints are valid rollback targets. Two reasons: (a) without it the discarded range holds only warn/breach windows, which admitted no learnings, making the non-amnesic mechanism a no-op; (b) it prevents restoring a snapshot minted after the injection landed."
+    },
+    "ledger_head": {
+      "type": ["string", "null"], "default": null,
+      "description": "Ledger admission-chain head at mint time. A plain reference — NOT hashed, because entry status mutates and would otherwise invalidate every downstream checkpoint on the first eviction."
+    }
+  },
+  "$defs": {
+    "IntentDigest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["objective", "constraints", "done_criteria", "key_decisions", "open_subgoals"],
+      "description": "<=200 tokens total. This is what is rendered as the authoritative objective block on rollback, and it is on the projector during the demo — keep it clean.",
+      "properties": {
+        "objective": { "type": "string", "description": "One sentence." },
+        "constraints": { "type": "array", "items": { "type": "string" }, "description": "Copied verbatim from the spec plus any accumulated." },
+        "done_criteria": { "type": "array", "items": { "type": "string" } },
+        "key_decisions": { "type": "array", "items": { "type": "string" } },
+        "open_subgoals": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "Snapshot": {
+      "type": "object", "additionalProperties": false,
+      "required": ["file_hashes", "files_ref", "scratchpad"],
+      "properties": {
+        "file_hashes": {
+          "type": "object", "additionalProperties": { "type": "string" },
+          "description": "path -> sha256. v3/D4: excludes __pycache__/, *.pyc, .pytest_cache/ — otherwise every run_tests call perturbs the map and the chain records phantom diffs."
+        },
+        "files_ref": { "type": "string", "description": "runs/{run_id}/snapshots/{ckpt_id}/" },
+        "scratchpad": { "type": "string" }
+      }
+    }
+  }
+}

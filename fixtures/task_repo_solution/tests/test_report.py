@@ -1,4 +1,4 @@
-"""Group C — text reporting (loglens/report.py)."""
+"""Group C — text reporting (loglens/query.py)."""
 
 from __future__ import annotations
 
