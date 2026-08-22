@@ -84,15 +84,23 @@ async def get_run(run_id: str) -> dict[str, Any]:
 
 @router.get("/runs/{run_id}/events", response_class=PlainTextResponse)
 async def get_events(run_id: str) -> str:
-    """JSONL — the replay source, byte-identical to what the WebSocket streamed."""
-    record = REGISTRY.get(run_id)
-    if record is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=f"unknown run: {run_id}")
+    """JSONL — the replay source, byte-identical to what the WebSocket streamed.
+
+    Falls back to the on-disk log for runs the registry no longer holds, so a finished run stays
+    replayable across a backend restart.
+    """
     from backend.contracts import canonical_json
 
-    return "".join(
-        canonical_json(e.model_dump(mode="json")) + "\n" for e in record.controller.store.events
-    )
+    record = REGISTRY.get(run_id)
+    if record is not None:
+        return "".join(
+            canonical_json(e.model_dump(mode="json")) + "\n" for e in record.controller.store.events
+        )
+
+    events = REGISTRY.events_on_disk(run_id)
+    if events is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=f"unknown run: {run_id}")
+    return "".join(canonical_json(e) + "\n" for e in events)
 
 
 @router.get("/runs/{run_id}/ledger")

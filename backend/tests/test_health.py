@@ -77,3 +77,35 @@ def test_websocket_attaches_and_reports_an_unknown_run() -> None:
         assert hello["type"] == "hello"
         assert hello["run_id"] == "does-not-exist"
         assert hello["note"] == "unknown run"
+
+
+def test_a_finished_run_stays_replayable_after_a_restart(tmp_path) -> None:
+    """The registry is in-memory; the event log is not.
+
+    Observed live: after restarting the backend, every run id still held by an open UI returned 404
+    forever, even though its log was sitting in runs/{id}/events.jsonl. Losing a finished run to a
+    process restart is the wrong failure to have on a demo machine.
+    """
+    from backend.api.runs import REGISTRY
+    from backend.config import get_settings
+
+    run_id = "sup-restart-test"
+    log = get_settings().runs_dir / run_id / "events.jsonl"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    log.write_text(
+        '{"run_id":"sup-restart-test","seq":0,"ts":"t","type":"task_start",'
+        '"payload":{"task":"loglens","mode":"supervised","spec_hash":"a"}}\n'
+    )
+    try:
+        assert REGISTRY.get(run_id) is None, "not in memory, exactly as after a restart"
+        response = client.get(f"/api/runs/{run_id}/events")
+        assert response.status_code == 200
+        assert len([x for x in response.text.splitlines() if x.strip()]) == 1
+    finally:
+        log.unlink()
+        log.parent.rmdir()
+
+
+def test_path_traversal_on_the_disk_fallback_is_refused() -> None:
+    assert client.get("/api/runs/..%2F..%2Fetc/events").status_code == 404
+    assert client.get("/api/runs/nope/events").status_code == 404

@@ -8,6 +8,7 @@ carry byte-identical objects, so replay renders from exactly what live rendered.
 from __future__ import annotations
 
 import asyncio
+import json
 import shutil
 import threading
 import uuid
@@ -165,6 +166,21 @@ class RunRegistry:
 
     def get(self, run_id: str) -> RunRecord | None:
         return self.runs.get(run_id)
+
+    def events_on_disk(self, run_id: str) -> list[dict[str, Any]] | None:
+        """Read a completed run's log straight from disk.
+
+        The registry is in-memory and demo-scoped, but the event log is not -- it is appended to
+        runs/{id}/events.jsonl as the run happens. Without this, restarting the backend makes every
+        finished run unreplayable even though the data is sitting right there, which is exactly the
+        wrong failure to have on a demo machine.
+        """
+        if "/" in run_id or ".." in run_id:
+            return None
+        path = get_settings().runs_dir / run_id / "events.jsonl"
+        if not path.is_file():
+            return None
+        return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
 
     def list(self) -> list[dict[str, Any]]:
         return [r.summary() for r in self.runs.values()]

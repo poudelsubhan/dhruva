@@ -115,24 +115,60 @@ export default function App() {
   // Pull the ledger alongside the stream so eviction state is visible, not just the mint events.
   useEffect(() => {
     if (!liveRunId) return
-    const load = () => getLedger(liveRunId).then(setLedger).catch(() => undefined)
-    load()
-    const timer = setInterval(load, 1500)
+    let failures = 0
+    const timer = setInterval(() => {
+      getLedger(liveRunId)
+        .then((rows) => {
+          failures = 0
+          setLedger(rows)
+        })
+        .catch(() => {
+          // Give up rather than poll a run that is gone. The registry is in-memory, so a backend
+          // restart makes every id in the UI unresolvable, and a silent catch turns that into an
+          // endless stream of 404s in the server log.
+          if (++failures >= 3) clearInterval(timer)
+        })
+    }, 1500)
     return () => clearInterval(timer)
   }, [liveRunId, stream.events.length])
 
   useEffect(() => {
     if (source?.kind !== 'twin') return
+    let failures = 0
+    let stop = false
+
     const load = async () => {
-      const [a, b] = await Promise.all([
-        getRunEvents(source.supervised).catch(() => []),
-        getRunEvents(source.unsupervised).catch(() => []),
+      const [a, b] = await Promise.allSettled([
+        getRunEvents(source.supervised),
+        getRunEvents(source.unsupervised),
       ])
-      setTwin({ supervised: a, unsupervised: b })
+      if (stop) return
+
+      if (a.status === 'rejected' && b.status === 'rejected') {
+        // Both gone: almost always a backend restart, since the registry is in-memory. Say so once
+        // and stop, rather than emitting a 404 every 1.5s forever.
+        if (++failures >= 3) {
+          stop = true
+          setError('That twin run is no longer available — the backend restarted. Start a new one.')
+        }
+        return
+      }
+      failures = 0
+      setTwin({
+        supervised: a.status === 'fulfilled' ? a.value : [],
+        unsupervised: b.status === 'fulfilled' ? b.value : [],
+      })
     }
-    load()
-    const timer = setInterval(load, 1500)
-    return () => clearInterval(timer)
+
+    void load()
+    const timer = setInterval(() => {
+      if (stop) clearInterval(timer)
+      else void load()
+    }, 1500)
+    return () => {
+      stop = true
+      clearInterval(timer)
+    }
   }, [source])
 
   const allEvents = source?.kind === 'live' ? stream.events : staticEvents
