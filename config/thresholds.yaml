@@ -1,0 +1,46 @@
+# The single tuning surface. Phase 4 calibrates these against three clean runs, then freezes them.
+# Tasks tune fixtures, never thresholds — that keeps the one shared file out of the parallel phase.
+
+verifier:
+  # Composite coherence: C = w_alignment*A + w_repetition*R + w_progress*P
+  weights:
+    alignment: 0.6
+    repetition: 0.2
+    progress: 0.2
+  thresholds:
+    breach: 0.55
+    warn: 0.70
+  # Two consecutive warns escalate to a breach — drift that persists is drift.
+  consecutive_warns_to_breach: 2
+  window_steps: 5
+  # Repetition looks at the last k action descriptions pairwise.
+  repetition_window: 6
+  progress:
+    advanced: 1.0
+    # Zero delta across two consecutive windows. Note D8: an agent reading before writing can
+    # legitimately sit flat for ~4 steps, so this is a soft signal carrying only 0.2 weight.
+    stagnant: 0.2
+    unchanged: 0.6
+
+ledger:
+  # Deterministic taint audit — no judge call on the rollback path.
+  taint_weights:
+    struct: 0.60   # source_seqs intersects a poisoned observation or the injection
+    time: 0.25     # fraction of sources at or after the injection
+    dep: 0.15      # supersedes or cites an already-evicted entry
+  evict_at: 0.50
+  # failed_approach entries are admitted from ANY verdict at halved confidence: a window verdicts
+  # incoherent precisely when "this approach fails" is true and most worth keeping.
+  failed_approach_confidence_factor: 0.5
+  retrieval_token_budget: 250
+  max_retrieved: 8
+  dedupe_similarity: 0.85
+  cross_run_decay: 0.8
+
+rollback:
+  # A checkpoint is a valid target only once the FOLLOWING window also passes. Without this the
+  # discarded range holds only warn/breach windows, which admitted nothing, and the non-amnesic
+  # mechanism is a no-op.
+  require_confirmed_checkpoint: true
+  preflight_retries: 1
+  history_token_budget: 150
