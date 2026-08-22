@@ -213,7 +213,9 @@ export function TimelineTrack<E extends TimelineEvent>({
               <button
                 key={event.seq}
                 type="button"
-                disabled={!selectable}
+                // Never disabled: hover- and focus-to-inspect must work whether or not a
+                // caller wired selection. `disabled` would also drop the glyph out of the
+                // tab order, making the timeline unreadable by keyboard.
                 onClick={selectable ? () => onSelect?.(event) : undefined}
                 onMouseEnter={() => setHovered(event)}
                 onMouseLeave={() => setHovered((prev) => (prev === event ? null : prev))}

@@ -91,11 +91,10 @@ function dialArc(cx: number, cy: number, r: number, t0: number, t1: number): str
 const clamp01 = (n: number) => Math.min(1, Math.max(0, Number.isFinite(n) ? n : 0))
 
 function prefersReducedMotion(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  )
+  // If we cannot ask, do not animate. Anything without matchMedia (jsdom, SSR) is not a
+  // display we should be tweening for, and the still frame is always the correct value.
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return true
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches
 }
 
 /**
