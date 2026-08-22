@@ -26,7 +26,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, cast
 
 from rapidfuzz.distance import Levenshtein
 
@@ -182,7 +182,7 @@ class Ledger:
             source_seqs=sorted(set(source_seqs)) or [minted_at_seq],
             minted_at_seq=minted_at_seq,
             checkpoint_ref=checkpoint_ref,
-            admitted_from_verdict=verdict,
+            admitted_from_verdict=cast("Literal['pass', 'warn', 'breach']", verdict),
         )
         if entry.id in self.entries:
             return []
@@ -265,7 +265,8 @@ class Ledger:
             return e.confidence * (0.5 + 0.5 * recency) * (1 + 0.1 * len(e.uses))
 
         ordered = sorted(clean, key=rank, reverse=True)
-        chosen, spent = [], 0
+        chosen: list[LedgerEntry] = []
+        spent = 0
         for entry in ordered:
             cost = max(1, len(entry.text) // 4)  # ~4 chars/token
             if len(chosen) >= cap or spent + cost > budget:

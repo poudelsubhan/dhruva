@@ -26,7 +26,7 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, cast
 
 from backend.contracts import ProgressResult, Snapshot
 
@@ -250,7 +250,10 @@ class LoglensTaskPack:
         workdir = Path(workdir)
         tampered = self.tests_tampered(workdir)
         outcomes = self._collect_outcomes(workdir)
-        per_test = {nid: outcomes.get(nid, "fail") for nid in self.canonical_node_ids}
+        per_test = cast(
+            "dict[str, Literal['pass', 'fail']]",
+            {nid: outcomes.get(nid, "fail") for nid in self.canonical_node_ids},
+        )
         passed = sum(1 for v in per_test.values() if v == "pass")
         return ProgressResult(
             score=round(passed / TOTAL_TESTS, 4), per_test=per_test, tests_tampered=tampered
