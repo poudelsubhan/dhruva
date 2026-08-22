@@ -1,165 +1,335 @@
-import { useEffect, useState } from 'react'
-import { fetchHealth, type HealthResponse } from './lib/health'
-import { SampleScreen } from './screens/sample/SampleScreen'
+/**
+ * Dhruva — the flight recorder shell.
+ *
+ * Three sources feed one render path: a live WebSocket, a replayed JSONL log, and the offline mock
+ * fixtures. Only the source differs; the view is identical, which is what makes replay a real
+ * replay rather than a second renderer that can drift.
+ */
 
-const POLL_MS = 3000
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import clsx from 'clsx'
+import LiveView from './views/live/LiveView'
+import { useRunStream } from './data/useRunStream'
+import {
+  armInjection,
+  getConfig,
+  getLedger,
+  getMockRun,
+  getRunEvents,
+  listRuns,
+  startRun,
+  type DhruvaConfig,
+  type LedgerEntryView,
+  type RunSummary,
+} from './data/api'
+import type { DhruvaEvent } from './contracts'
 
-type ConnectionState = 'connecting' | 'connected' | 'disconnected'
+type Source =
+  | { kind: 'live'; runId: string }
+  | { kind: 'replay'; runId: string }
+  | { kind: 'mock'; name: 'happy' | 'breach' }
 
-type HealthState = {
-  state: ConnectionState
-  health: HealthResponse | null
-}
+const SCENARIOS: { key: string; label: string; blurb: string }[] = [
+  { key: 's1', label: 'S1 · contradictory instruction', blurb: 'a plausible redirect that supersedes the objective' },
+  { key: 's2', label: 'S2 · poisoned tool output', blurb: 'a falsified test result it has no way to distrust' },
+  { key: 's3', label: 'S3 · compaction loss', blurb: 'a lossy summary that drops one critical constraint' },
+]
 
-function useHealth(): HealthState {
-  const [state, setState] = useState<ConnectionState>('connecting')
-  const [health, setHealth] = useState<HealthResponse | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    const controller = new AbortController()
-
-    async function poll() {
-      try {
-        const result = await fetchHealth(controller.signal)
-        if (cancelled) return
-        setHealth(result)
-        setState('connected')
-      } catch {
-        if (cancelled) return
-        setHealth(null)
-        setState('disconnected')
-      }
-    }
-
-    void poll()
-    const timer = setInterval(() => void poll(), POLL_MS)
-
-    return () => {
-      cancelled = true
-      controller.abort()
-      clearInterval(timer)
-    }
-  }, [])
-
-  return { state, health }
-}
-
-const DOT_CLASS: Record<ConnectionState, string> = {
-  connecting: 'bg-zinc-500 animate-pulse',
-  connected: 'bg-zinc-200',
-  disconnected: 'bg-zinc-600',
-}
-
-const PILL_CLASS: Record<ConnectionState, string> = {
-  connecting: 'border-zinc-700 text-zinc-400',
-  connected: 'border-zinc-500 text-zinc-100',
-  disconnected: 'border-zinc-800 text-zinc-500',
-}
-
-function StatusPill({ state, health }: HealthState) {
-  let detail = 'waiting for backend on :8000'
-  if (state === 'connected') {
-    detail = `v${health?.version ?? 'unknown'}`
-  } else if (state === 'disconnected') {
-    detail = `retrying every ${POLL_MS / 1000}s`
-  }
-
+function Pill({ tone, children }: { tone: 'ok' | 'warn' | 'idle'; children: React.ReactNode }) {
   return (
-    <div
-      className={`inline-flex items-center gap-3 rounded-full border px-4 py-2 font-mono text-sm ${PILL_CLASS[state]}`}
-      role="status"
-      aria-live="polite"
+    <span
+      className={clsx(
+        'rounded-pill border px-3 py-1 font-mono text-micro tracking-[0.14em] uppercase',
+        tone === 'ok' && 'border-state-pass/60 text-state-pass',
+        tone === 'warn' && 'border-state-warn/60 text-state-warn',
+        tone === 'idle' && 'border-edge-default text-ink-muted',
+      )}
     >
-      <span
-        className={`inline-block h-2 w-2 rounded-full ${DOT_CLASS[state]}`}
-        aria-hidden="true"
-      />
-      <span>{state}</span>
-      <span className="text-zinc-500">{detail}</span>
-    </div>
-  )
-}
-
-type View = 'shell' | 'sample'
-
-/** Dev toggle between the Phase 0 shell and T1.2's composed sample screen. */
-function ViewToggle({ view, onChange }: { view: View; onChange: (next: View) => void }) {
-  const options: Array<[View, string]> = [
-    ['shell', 'shell'],
-    ['sample', 'sample'],
-  ]
-
-  return (
-    <div
-      role="group"
-      aria-label="View"
-      className="inline-flex items-center gap-hair rounded-pill border border-edge-default bg-base-800 p-hair"
-    >
-      {options.map(([value, label]) => (
-        <button
-          key={value}
-          type="button"
-          onClick={() => onChange(value)}
-          aria-pressed={view === value}
-          className={`rounded-pill px-snug py-tick font-mono text-micro tracking-[0.16em] uppercase ${
-            view === value
-              ? 'bg-base-500 text-ink-primary'
-              : 'text-ink-muted hover:text-ink-secondary'
-          }`}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
+      {children}
+    </span>
   )
 }
 
 export default function App() {
-  const { state, health } = useHealth()
-  const [view, setView] = useState<View>('shell')
+  const [config, setConfig] = useState<DhruvaConfig | null>(null)
+  const [source, setSource] = useState<Source | null>(null)
+  const [staticEvents, setStaticEvents] = useState<DhruvaEvent[]>([])
+  const [ledger, setLedger] = useState<LedgerEntryView[]>([])
+  const [runs, setRuns] = useState<RunSummary[]>([])
+  const [scenario, setScenario] = useState<string>('s2')
+  const [atStep, setAtStep] = useState(12)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [scrub, setScrub] = useState<number | null>(null)
 
-  if (view === 'sample') {
-    return (
-      <div className="min-h-screen w-full bg-base-900">
-        <header className="flex flex-wrap items-center justify-between gap-gutter border-b border-edge-default bg-base-950 px-bay py-gutter">
-          <div className="flex items-baseline gap-snug">
-            <span className="text-title font-semibold tracking-tight text-ink-primary">
-              Dhruva
-            </span>
-            <span className="font-mono text-micro tracking-[0.2em] text-ink-muted uppercase">
-              flight recorder · visual contract
-            </span>
-          </div>
-          <div className="flex items-center gap-gutter">
-            <StatusPill state={state} health={health} />
-            <ViewToggle view={view} onChange={setView} />
-          </div>
-        </header>
-        <SampleScreen />
-      </div>
-    )
+  const liveRunId = source?.kind === 'live' ? source.runId : null
+  const stream = useRunStream(liveRunId)
+
+  useEffect(() => {
+    getConfig().then(setConfig).catch(() => setError('backend unreachable'))
+  }, [])
+
+  const refreshRuns = useCallback(() => {
+    listRuns().then(setRuns).catch(() => undefined)
+  }, [])
+
+  useEffect(() => {
+    refreshRuns()
+    const timer = setInterval(refreshRuns, 2000)
+    return () => clearInterval(timer)
+  }, [refreshRuns])
+
+  // Pull the ledger alongside the stream so eviction state is visible, not just the mint events.
+  useEffect(() => {
+    if (!liveRunId) return
+    const load = () => getLedger(liveRunId).then(setLedger).catch(() => undefined)
+    load()
+    const timer = setInterval(load, 1500)
+    return () => clearInterval(timer)
+  }, [liveRunId, stream.events.length])
+
+  const allEvents = source?.kind === 'live' ? stream.events : staticEvents
+  const maxSeq = allEvents.length ? allEvents[allEvents.length - 1].seq : 0
+  const shown = useMemo(
+    () => (scrub === null ? allEvents : allEvents.filter((e) => e.seq <= scrub)),
+    [allEvents, scrub],
+  )
+
+  async function launch(withScenario: boolean) {
+    setBusy(true)
+    setError(null)
+    setScrub(null)
+    setLedger([])
+    try {
+      const run = await startRun({
+        mode: 'supervised',
+        task: 'loglens',
+        scenario: withScenario ? scenario : null,
+        at_step: withScenario ? atStep : null,
+      })
+      setSource({ kind: 'live', runId: run.run_id })
+      refreshRuns()
+    } catch (exc) {
+      setError(String(exc))
+    } finally {
+      setBusy(false)
+    }
   }
 
+  async function openReplay(runId: string) {
+    setBusy(true)
+    try {
+      const events = await getRunEvents(runId)
+      setStaticEvents(events)
+      setLedger(await getLedger(runId).catch(() => []))
+      setSource({ kind: 'replay', runId })
+      setScrub(null)
+    } catch (exc) {
+      setError(String(exc))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function openMock(name: 'happy' | 'breach') {
+    setBusy(true)
+    try {
+      setStaticEvents(await getMockRun(name))
+      setLedger([])
+      setSource({ kind: 'mock', name })
+      setScrub(null)
+    } catch (exc) {
+      setError(String(exc))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function fireNow() {
+    if (!liveRunId) return
+    await armInjection(liveRunId, scenario, { now: true }).catch((exc: unknown) => setError(String(exc)))
+  }
+
+  const label =
+    source === null
+      ? 'no run'
+      : source.kind === 'mock'
+        ? `mock · ${source.name}`
+        : source.runId
+
   return (
-    <div className="flex min-h-screen w-full flex-col justify-between bg-zinc-950 px-8 py-10 text-zinc-100">
-      <header className="flex items-center justify-between gap-6 font-mono text-xs tracking-widest text-zinc-600 uppercase">
-        <span>phase 0 — scaffold</span>
-        <ViewToggle view={view} onChange={setView} />
+    <div className="min-h-screen bg-base-900 text-ink-primary">
+      <header className="flex flex-wrap items-center justify-between gap-gutter border-b border-edge-subtle px-panel py-snug">
+        <div className="flex items-baseline gap-3">
+          <h1 className="text-h3 font-semibold tracking-tight">Dhruva</h1>
+          <p className="font-mono text-micro tracking-[0.18em] text-ink-muted uppercase">
+            agent supervisor · flight recorder
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-tight">
+          {config ? (
+            <>
+              <Pill tone={config.live_provider ? 'ok' : 'warn'}>
+                {config.live_provider ? 'live provider' : 'mock provider'}
+              </Pill>
+              <span className="font-mono text-micro text-ink-muted">
+                agent {config.models.agent} · judge {config.models.judge}
+              </span>
+            </>
+          ) : (
+            <Pill tone="idle">connecting</Pill>
+          )}
+        </div>
       </header>
 
-      <main className="flex flex-col items-start gap-6">
-        <h1 className="text-6xl font-semibold tracking-tight">Dhruva</h1>
-        <p className="text-lg text-zinc-400">
-          agent supervisor — flight recorder
-        </p>
-        <StatusPill state={state} health={health} />
-      </main>
+      <main className="flex flex-col gap-gutter p-panel">
+        <section className="flex flex-wrap items-end gap-gutter rounded-panel border border-edge-default bg-base-800 p-panel">
+          <div className="flex flex-col gap-tight">
+            <span className="font-mono text-micro tracking-[0.18em] text-ink-muted uppercase">
+              scenario
+            </span>
+            <div className="flex flex-wrap gap-tight">
+              {SCENARIOS.map((s) => (
+                <button
+                  key={s.key}
+                  type="button"
+                  title={s.blurb}
+                  onClick={() => setScenario(s.key)}
+                  className={clsx(
+                    'rounded-mark border px-3 py-2 text-left font-mono text-micro transition-colors',
+                    scenario === s.key
+                      ? 'border-coherence-400 text-ink-primary'
+                      : 'border-edge-default text-ink-muted hover:border-edge-strong',
+                  )}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
-      <footer className="font-mono text-xs text-zinc-600">
-        <span>build mode: {import.meta.env.MODE}</span>
-        {health ? <span> · service: {health.service}</span> : null}
-      </footer>
+          <label className="flex flex-col gap-tight">
+            <span className="font-mono text-micro tracking-[0.18em] text-ink-muted uppercase">
+              at step
+            </span>
+            <input
+              type="number"
+              min={1}
+              value={atStep}
+              onChange={(e) => setAtStep(Number(e.target.value))}
+              className="w-20 rounded-mark border border-edge-default bg-base-900 px-2 py-2 font-mono text-small"
+            />
+          </label>
+
+          <div className="flex flex-wrap gap-tight">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => launch(true)}
+              className="rounded-mark border border-coherence-400 px-4 py-2 font-mono text-micro tracking-[0.14em] text-coherence-400 uppercase transition-colors hover:bg-coherence-400/10 disabled:opacity-40"
+            >
+              run with scenario
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => launch(false)}
+              className="rounded-mark border border-edge-default px-4 py-2 font-mono text-micro tracking-[0.14em] text-ink-secondary uppercase transition-colors hover:border-edge-strong disabled:opacity-40"
+            >
+              clean run
+            </button>
+            <button
+              type="button"
+              disabled={!liveRunId}
+              onClick={fireNow}
+              className="rounded-mark border border-alarm-400 px-4 py-2 font-mono text-micro tracking-[0.14em] text-alarm-400 uppercase transition-colors hover:bg-alarm-400/10 disabled:opacity-30"
+            >
+              inject now
+            </button>
+            <button
+              type="button"
+              onClick={() => openMock('breach')}
+              className="rounded-mark border border-edge-default px-4 py-2 font-mono text-micro tracking-[0.14em] text-ink-muted uppercase hover:border-edge-strong"
+            >
+              mock breach
+            </button>
+          </div>
+        </section>
+
+        {error ? (
+          <p className="rounded-panel border border-alarm-400/50 bg-alarm-400/10 px-panel py-snug font-mono text-small text-alarm-400">
+            {error}
+          </p>
+        ) : null}
+
+        {allEvents.length > 0 ? (
+          <div className="flex items-center gap-gutter rounded-panel border border-edge-default bg-base-800 px-panel py-snug">
+            <span className="font-mono text-micro tracking-[0.18em] text-ink-muted uppercase">
+              scrub
+            </span>
+            <input
+              type="range"
+              min={0}
+              max={maxSeq}
+              value={scrub ?? maxSeq}
+              onChange={(e) => setScrub(Number(e.target.value))}
+              className="h-1 flex-1 accent-coherence-400"
+            />
+            <span className="w-24 text-right font-mono text-micro text-ink-muted">
+              seq {scrub ?? maxSeq}/{maxSeq}
+            </span>
+            <button
+              type="button"
+              onClick={() => setScrub(null)}
+              className="font-mono text-micro text-ink-muted underline-offset-2 hover:underline"
+            >
+              live
+            </button>
+          </div>
+        ) : null}
+
+        {source ? (
+          <LiveView
+            events={shown}
+            config={config}
+            ledger={ledger}
+            connected={source.kind === 'live' && stream.connected}
+            label={label}
+            playhead={scrub}
+          />
+        ) : (
+          <p className="rounded-panel border border-edge-default bg-base-800 px-panel py-12 text-center text-ink-muted">
+            Start a run, or open the mock breach log.
+          </p>
+        )}
+
+        {runs.length > 0 ? (
+          <section className="rounded-panel border border-edge-default bg-base-800 p-panel">
+            <h2 className="mb-snug font-mono text-micro tracking-[0.18em] text-ink-muted uppercase">
+              runs
+            </h2>
+            <div className="flex flex-col gap-tight">
+              {runs.map((r) => (
+                <button
+                  key={r.run_id}
+                  type="button"
+                  onClick={() => openReplay(r.run_id)}
+                  className="flex flex-wrap items-center gap-gutter rounded-mark border border-edge-subtle px-3 py-2 text-left font-mono text-micro text-ink-secondary hover:border-edge-strong"
+                >
+                  <span className="text-ink-primary">{r.run_id}</span>
+                  <span>{r.mode}</span>
+                  {r.scenario ? <span className="text-state-warn">{r.scenario}</span> : null}
+                  <span>{r.state}</span>
+                  <span>{r.events} events</span>
+                  <span>{r.checkpoints} ckpt</span>
+                  {r.rollbacks ? <span className="text-alarm-400">{r.rollbacks} rollback</span> : null}
+                  <span>{Math.round(r.progress * 12)}/12</span>
+                </button>
+              ))}
+            </div>
+          </section>
+        ) : null}
+      </main>
     </div>
   )
 }
