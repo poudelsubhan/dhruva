@@ -240,7 +240,9 @@ is *why* it reproduces.
 
 One honest note on the test suite: it mocks the AI judge, which keeps it fast and free — and made it
 blind to five real defects that only appeared when a live model was scoring live windows. Each is
-written up in [`docs/build-decisions.md`](docs/build-decisions.md) (D11). Four shared a single cause:
+written up in [`docs/build-decisions.md`](docs/build-decisions.md) (D11), and the full technical
+walkthrough — including the questions judges tend to ask — is in
+[`docs/walkthrough.md`](docs/walkthrough.md). Four shared a single cause:
 state that outlived the situation it described. Mocked tests verify mechanism; they cannot verify
 judgement under real input.
 
