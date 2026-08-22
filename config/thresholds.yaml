@@ -8,8 +8,8 @@ verifier:
     repetition: 0.2
     progress: 0.2
   thresholds:
-    breach: 0.55
-    warn: 0.70
+    breach: 0.608
+    warn: 0.6580
   # Two consecutive warns escalate to a breach — drift that persists is drift.
   consecutive_warns_to_breach: 2
   window_steps: 5

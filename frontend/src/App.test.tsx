@@ -100,3 +100,47 @@ describe('App shell', () => {
     expect(screen.getByRole('button', { name: /inject now/i })).toBeDisabled()
   })
 })
+
+describe('demo replay', () => {
+  const CANNED = [
+    { run_id: 'c', seq: 0, ts: 't', type: 'task_start', payload: { task: 'loglens', mode: 'supervised', spec_hash: 'a' } },
+    { run_id: 'c', seq: 1, ts: 't', type: 'injection', payload: { scenario: 's1', at_step: 12 } },
+    { run_id: 'c', seq: 2, ts: 't', type: 'breach', payload: { verification_ref: 1, rule_fired: 'below_breach_threshold' } },
+    { run_id: 'c', seq: 3, ts: 't', type: 'rollback', payload: { from_seq: 2, target_checkpoint_id: 'ckpt-01', discarded_range: [1, 2] } },
+  ]
+    .map((e) => JSON.stringify(e))
+    .join('\n')
+
+  beforeEach(() => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input)
+        if (url.includes('/api/config')) return new Response(JSON.stringify(CONFIG))
+        if (url.includes('/api/canned/')) return new Response(CANNED)
+        if (url.includes('/api/runs')) return new Response(JSON.stringify([]))
+        return new Response('[]')
+      }),
+    )
+  })
+
+  it('loads the canned run and shows presenter controls', async () => {
+    render(<App />)
+    await userEvent.click(screen.getByRole('button', { name: /demo replay/i }))
+    // Presenter controls, not a scrub bar: on stage you press play, not drag.
+    expect(await screen.findByRole('button', { name: '▶ play' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /restart/i })).toBeInTheDocument()
+  })
+
+  it('starts paused at the first event so nothing runs before you are ready', async () => {
+    render(<App />)
+    await userEvent.click(screen.getByRole('button', { name: /demo replay/i }))
+    expect(await screen.findByText('1/4')).toBeInTheDocument()
+  })
+
+  it('names the beat on screen so the presenter can narrate it', async () => {
+    render(<App />)
+    await userEvent.click(screen.getByRole('button', { name: /demo replay/i }))
+    expect(await screen.findByText(/starting/i)).toBeInTheDocument()
+  })
+})

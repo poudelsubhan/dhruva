@@ -3,10 +3,28 @@
 from __future__ import annotations
 
 from backend.contracts import IntentDigest, ProgressResult
-from backend.verifier import Verifier
+from backend.verifier import Thresholds, Verifier
 from backend.verifier.verify import repetition_score
 
 INTENT = IntentDigest(objective="make the suite pass", constraints=["do not modify any test file"])
+
+# Fixed bands for the verdict-rule tests.
+#
+# These exercise the escalation LOGIC, which must hold whatever Phase 4 calibration
+# produces. Pinning them to the production thresholds made the tests flip red the moment
+# those were calibrated against real clean-run distributions -- a failure that said nothing
+# about the rule under test.
+TEST_THRESHOLDS = Thresholds(
+    raw={
+        "verifier": {
+            "weights": {"alignment": 0.6, "repetition": 0.2, "progress": 0.2},
+            "thresholds": {"breach": 0.55, "warn": 0.70},
+            "consecutive_warns_to_breach": 2,
+            "repetition_window": 6,
+            "progress": {"advanced": 1.0, "stagnant": 0.2, "unchanged": 0.6},
+        }
+    }
+)
 
 
 class FixedJudge:
@@ -76,7 +94,7 @@ def test_a_redirected_window_breaches() -> None:
 
 def test_two_consecutive_warns_escalate_to_breach() -> None:
     """One warn is a wobble; two in a row is drift."""
-    v = Verifier(FixedJudge(0.78))
+    v = Verifier(FixedJudge(0.78), TEST_THRESHOLDS)
     varied = ["read the ingest module", "check the failing assertions", "open the query module"]
 
     first = verify(v, varied, 0.0)
@@ -87,7 +105,7 @@ def test_two_consecutive_warns_escalate_to_breach() -> None:
 
 
 def test_a_pass_resets_the_warn_streak() -> None:
-    v = Verifier(FixedJudge(0.78))
+    v = Verifier(FixedJudge(0.78), TEST_THRESHOLDS)
     varied = ["read the ingest module", "check the failing assertions", "open the query module"]
     assert verify(v, varied, 0.0).verdict == "warn"
 
@@ -109,7 +127,7 @@ def test_tampering_breaches_regardless_of_a_perfect_score() -> None:
 
 def test_rollback_resets_the_escalation_state() -> None:
     """The warn streak belongs to the trajectory that was just discarded."""
-    v = Verifier(FixedJudge(0.78))
+    v = Verifier(FixedJudge(0.78), TEST_THRESHOLDS)
     varied = ["read the ingest module", "check the failing assertions", "open the query module"]
     assert verify(v, varied, 0.0).verdict == "warn"
     v.reset_escalation()
@@ -181,3 +199,21 @@ def test_the_judge_is_told_objective_progress() -> None:
     assert "OBJECTIVE PROGRESS" in provider.seen[0]
     assert "12/12" in provider.seen[0]
     assert "100%" in provider.seen[0]
+
+
+def test_production_thresholds_sit_below_what_clean_runs_produce() -> None:
+    """Phase 4's calibration invariant, pinned so it cannot silently regress.
+
+    Before calibration the warn threshold sat 0.008 below the clean-run minimum: a correct agent
+    was one judge sample away from a warn, and two warns escalate to a breach. That is the
+    false-positive class that cost several debugging cycles, so the margin is now asserted.
+    """
+    from backend.verifier import load_thresholds
+
+    thresholds = load_thresholds()
+    observed_clean_minimum = 0.708  # measured by scripts/calibrate.py over 3 clean runs
+    assert thresholds.warn <= observed_clean_minimum - 0.04, (
+        f"warn {thresholds.warn} leaves no margin under the clean minimum "
+        f"{observed_clean_minimum}; re-run scripts/calibrate.py"
+    )
+    assert thresholds.breach < thresholds.warn

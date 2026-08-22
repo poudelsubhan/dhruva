@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Request, status
@@ -108,6 +109,43 @@ async def inject(run_id: str, request: InjectRequest) -> dict[str, Any]:
     if not REGISTRY.inject(run_id, request.scenario, request.at_step, request.now):
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=f"unknown run: {run_id}")
     return {"armed": request.scenario, "run_id": run_id, "now": request.now}
+
+
+@router.get("/canned")
+async def list_canned() -> list[dict[str, Any]]:
+    """Canned runs — the on-stage fallback and the demo's replay source.
+
+    These are real logs from real runs, not synthetic. Replaying one renders through exactly the
+    same path as live, because the log is the same object the WebSocket carried.
+    """
+    from backend.config import get_settings
+
+    out: list[dict[str, Any]] = []
+    for path in sorted((get_settings().fixtures_dir / "canned").glob("*.jsonl")):
+        events = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+        completes = [e for e in events if e["type"] == "task_complete"]
+        out.append(
+            {
+                "name": path.stem,
+                "events": len(events),
+                "rollbacks": len([e for e in events if e["type"] == "rollback"]),
+                "breaches": len([e for e in events if e["type"] == "breach"]),
+                "score": completes[-1]["payload"]["progress"]["score"] if completes else None,
+            }
+        )
+    return out
+
+
+@router.get("/canned/{name}", response_class=PlainTextResponse)
+async def get_canned(name: str) -> str:
+    from backend.config import get_settings
+
+    if "/" in name or ".." in name:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="bad name")
+    path = get_settings().fixtures_dir / "canned" / f"{name}.jsonl"
+    if not path.is_file():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=f"no canned run: {name}")
+    return path.read_text()
 
 
 @router.get("/mock/{name}", response_class=PlainTextResponse)

@@ -77,6 +77,23 @@ export async function getRunEvents(id: string): Promise<DhruvaEvent[]> {
   return parseJsonl(await response.text())
 }
 
+export interface CannedRun {
+  name: string
+  events: number
+  rollbacks: number
+  breaches: number
+  score: number | null
+}
+
+export const listCanned = () => json<CannedRun[]>('/api/canned')
+
+/** A canned run is a REAL log from a real run — replaying it uses the live render path exactly. */
+export async function getCanned(name: string): Promise<DhruvaEvent[]> {
+  const response = await fetch(`/api/canned/${name}`)
+  if (!response.ok) throw new Error(`canned ${name} -> ${response.status}`)
+  return parseJsonl(await response.text())
+}
+
 export async function getMockRun(name: 'happy' | 'breach'): Promise<DhruvaEvent[]> {
   const response = await fetch(`/api/mock/${name}`)
   if (!response.ok) throw new Error(`mock ${name} -> ${response.status}`)

@@ -12,8 +12,10 @@ import LiveView from './views/live/LiveView'
 import TwinView from './views/twin/TwinView'
 import GraphView from './views/graph/GraphView'
 import { useRunStream } from './data/useRunStream'
+import { usePlayback } from './data/usePlayback'
 import {
   armInjection,
+  getCanned,
   getConfig,
   getLedger,
   getMockRun,
@@ -31,6 +33,7 @@ type Source =
   | { kind: 'replay'; runId: string }
   | { kind: 'mock'; name: 'happy' | 'breach' }
   | { kind: 'twin'; supervised: string; unsupervised: string }
+  | { kind: 'canned'; name: string }
 
 const SCENARIOS: { key: string; label: string; blurb: string }[] = [
   { key: 's1', label: 'S1 · contradictory instruction', blurb: 'a plausible redirect that supersedes the objective' },
@@ -53,6 +56,23 @@ function Pill({ tone, children }: { tone: 'ok' | 'warn' | 'idle'; children: Reac
   )
 }
 
+/** Names the beat currently on screen, so a presenter always knows what they are pointing at. */
+function beatLabel(shown: readonly DhruvaEvent[]): string {
+  const last = shown[shown.length - 1]
+  if (!last) return 'ready'
+  const seen = new Set(shown.map((e) => e.type))
+  if (last.type === 'task_complete') return 'recovered · 12/12'
+  if (seen.has('resume') && !seen.has('task_complete')) return 'resumed — finishing the task'
+  if (seen.has('ledger_audit')) return 'knowledge audited — clean kept, poisoned evicted'
+  if (seen.has('rollback')) return 'rolling back to the last confirmed checkpoint'
+  if (seen.has('breach')) return 'breach — drift caught'
+  if (shown.some((e) => e.type === 'observation' && (e.payload as { poisoned?: boolean }).poisoned))
+    return 'poisoned — the tool lied, and it still looks fine'
+  if (seen.has('injection')) return 'corruption injected'
+  if (seen.has('checkpoint')) return 'working · checkpoints accruing'
+  return 'starting'
+}
+
 export default function App() {
   const [config, setConfig] = useState<DhruvaConfig | null>(null)
   const [source, setSource] = useState<Source | null>(null)
@@ -72,6 +92,14 @@ export default function App() {
 
   useEffect(() => {
     getConfig().then(setConfig).catch(() => setError('backend unreachable'))
+  }, [])
+
+  // ?demo=1 boots straight into the canned replay. On stage you do not want to be clicking
+  // through a UI to reach the thing you are about to talk over.
+  useEffect(() => {
+    if (!new URLSearchParams(window.location.search).has('demo')) return
+    void openCanned('s1-supervised')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const refreshRuns = useCallback(() => {
@@ -108,11 +136,30 @@ export default function App() {
   }, [source])
 
   const allEvents = source?.kind === 'live' ? stream.events : staticEvents
+  const isCanned = source?.kind === 'canned'
+  const playback = usePlayback(isCanned ? allEvents : [], 60_000)
   const maxSeq = allEvents.length ? allEvents[allEvents.length - 1].seq : 0
-  const shown = useMemo(
-    () => (scrub === null ? allEvents : allEvents.filter((e) => e.seq <= scrub)),
-    [allEvents, scrub],
-  )
+  const shown = useMemo(() => {
+    if (isCanned) return allEvents.slice(0, playback.index + 1)
+    return scrub === null ? allEvents : allEvents.filter((e) => e.seq <= scrub)
+  }, [allEvents, scrub, isCanned, playback.index])
+
+  // Space plays/pauses, R restarts. A presenter should not be hunting for a button mid-sentence.
+  useEffect(() => {
+    if (!isCanned) return
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null
+      if (target && ['INPUT', 'TEXTAREA'].includes(target.tagName)) return
+      if (e.code === 'Space') {
+        e.preventDefault()
+        playback.toggle()
+      } else if (e.key.toLowerCase() === 'r') {
+        playback.restart()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [isCanned, playback])
 
   async function launch(withScenario: boolean) {
     setBusy(true)
@@ -186,6 +233,21 @@ export default function App() {
     }
   }
 
+  async function openCanned(name: string) {
+    setBusy(true)
+    setError(null)
+    try {
+      setStaticEvents(await getCanned(name))
+      setLedger([])
+      setSource({ kind: 'canned', name })
+      setScrub(null)
+    } catch (exc) {
+      setError(String(exc))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function openMock(name: 'happy' | 'breach') {
     setBusy(true)
     try {
@@ -207,6 +269,7 @@ export default function App() {
 
   let label = 'no run'
   if (source?.kind === 'mock') label = `mock · ${source.name}`
+  else if (source?.kind === 'canned') label = `replay · ${source.name}`
   else if (source?.kind === 'twin') label = `twin · ${source.supervised}`
   else if (source) label = source.runId
 
@@ -309,6 +372,13 @@ export default function App() {
             </button>
             <button
               type="button"
+              onClick={() => openCanned('s1-supervised')}
+              className="rounded-mark border border-coherence-400 px-4 py-2 font-mono text-micro tracking-[0.14em] text-coherence-400 uppercase hover:bg-coherence-400/10"
+            >
+              demo replay
+            </button>
+            <button
+              type="button"
               onClick={() => openMock('breach')}
               className="rounded-mark border border-edge-default px-4 py-2 font-mono text-micro tracking-[0.14em] text-ink-muted uppercase hover:border-edge-strong"
             >
@@ -323,7 +393,39 @@ export default function App() {
           </p>
         ) : null}
 
-        {allEvents.length > 0 ? (
+        {isCanned && allEvents.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-gutter rounded-panel border border-coherence-400/40 bg-base-800 px-panel py-snug">
+            <button
+              type="button"
+              onClick={playback.toggle}
+              className="rounded-mark border border-coherence-400 px-4 py-2 font-mono text-micro tracking-[0.14em] text-coherence-400 uppercase hover:bg-coherence-400/10"
+            >
+              {playback.playing ? '❚❚ pause' : '▶ play'}
+            </button>
+            <button
+              type="button"
+              onClick={playback.restart}
+              className="rounded-mark border border-edge-default px-3 py-2 font-mono text-micro tracking-[0.14em] text-ink-secondary uppercase hover:border-edge-strong"
+            >
+              ↺ restart
+            </button>
+            <input
+              type="range"
+              min={0}
+              max={Math.max(0, allEvents.length - 1)}
+              value={playback.index}
+              onChange={(e) => playback.seek(Number(e.target.value))}
+              className="h-1 min-w-40 flex-1 accent-coherence-400"
+            />
+            <span className="font-mono text-micro text-ink-muted">
+              {playback.index + 1}/{allEvents.length}
+            </span>
+            <span className="font-mono text-micro tracking-[0.14em] text-coherence-400 uppercase">
+              {beatLabel(shown)}
+            </span>
+            <span className="font-mono text-micro text-ink-muted">space · R</span>
+          </div>
+        ) : allEvents.length > 0 ? (
           <div className="flex items-center gap-gutter rounded-panel border border-edge-default bg-base-800 px-panel py-snug">
             <span className="font-mono text-micro tracking-[0.18em] text-ink-muted uppercase">
               scrub
