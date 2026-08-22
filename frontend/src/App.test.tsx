@@ -58,12 +58,14 @@ describe('App shell', () => {
     expect(screen.getByText(/flight recorder/i)).toBeInTheDocument()
   })
 
-  it('reports the provider and both model ids once config loads', async () => {
+  it('names the judge model and does not claim the agent is a live one', async () => {
     render(<App />)
     expect(await screen.findByText(/live provider/i)).toBeInTheDocument()
-    // Mixed-provider is a property worth showing, not just asserting in a test.
-    expect(screen.getByText(/claude-sonnet-5/)).toBeInTheDocument()
     expect(screen.getByText(/gpt-5-mini/)).toBeInTheDocument()
+    // The agent is a scripted adapter -- that is what makes the demo deterministic. The header
+    // said `agent anthropic/claude-sonnet-5`, which was the one false claim on the screen.
+    expect(screen.getByText(/agent scripted/)).toBeInTheDocument()
+    expect(screen.queryByText(/claude-sonnet-5/)).not.toBeInTheDocument()
   })
 
   it('surfaces an unreachable backend rather than rendering empty', async () => {
