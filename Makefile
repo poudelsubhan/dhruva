@@ -9,7 +9,7 @@ FRONTEND_PORT ?= 5173
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install dev dev-backend dev-frontend test lint typecheck check build clean demo-mock demo demo-all
+.PHONY: help install dev dev-backend dev-frontend test lint typecheck check build clean demo-mock demo demo-all measure
 
 help:
 	@echo ""
@@ -28,6 +28,7 @@ help:
 	@echo "    demo-mock     regenerate the mock run logs"
 	@echo "    demo          one scenario end to end, offline (SCENARIO=s1|s2|s3)"
 	@echo "    demo-all      all three scenarios twice; proves determinism"
+	@echo "    measure       eviction precision vs naive policies"
 	@echo ""
 
 install:
@@ -97,6 +98,9 @@ demo-mock:
 
 demo:
 	uv run python scripts/demo_scenario.py --scenario $(or $(SCENARIO),s2)
+
+measure:
+	@for s in s1 s2 s3; do uv run python scripts/measure_retention.py --scenario $$s; done
 
 demo-all:
 	@for s in s1 s2 s3; do \
