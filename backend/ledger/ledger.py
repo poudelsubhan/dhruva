@@ -59,7 +59,21 @@ def taint_score(
     time   — how much of its evidence postdates the injection
     dep    — it builds on something already evicted
     """
-    struct = 1.0 if set(entry.source_seqs) & poison_seqs else 0.0
+    sources = set(entry.source_seqs)
+    poisoned_sources = sources & poison_seqs
+
+    # Independent prior support survives contamination, and the discriminator is WHEN the entry was
+    # first minted -- not which seqs it cites.
+    #
+    # source_seqs is a window range, so any window spanning the corruption contains clean seqs too;
+    # testing membership would rescue everything. But evidence merges on re-observation, so a clean
+    # entry restated in a poisoned window WILL accumulate poisoned seqs, and testing membership
+    # alone would destroy it. minted_at_seq settles both: it is immutable, it is part of the entry
+    # id, and an entry first established before any corruption landed was established from clean
+    # observations by construction.
+    first_poison = min(poison_seqs) if poison_seqs else None
+    established_clean = first_poison is not None and entry.minted_at_seq < first_poison
+    struct = 1.0 if poisoned_sources and not established_clean else 0.0
 
     if injection_seq is None:
         time = 0.0  # never undefined: a breach does not require a preceding injection
@@ -74,6 +88,10 @@ def taint_score(
     # falsehood makes you false. Both saturate the score so the transitive closure actually closes.
     if struct or dep:
         return 1.0, ("poisoned_source" if struct else "superseded_evicted")
+
+    # Established before the corruption and merely restated after it: retain.
+    if poisoned_sources and established_clean:
+        return 0.0, "independently_supported"
 
     # Position alone is deliberately NOT enough to evict: `time` maxes at its own weight, which is
     # below the cutoff. A learning minted after the injection but sourced from clean observations is

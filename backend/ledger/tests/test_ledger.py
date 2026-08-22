@@ -170,7 +170,8 @@ def test_audit_reaches_a_fixed_point() -> None:
         "footer text reports the row count",
     ]
     for i, topic in enumerate(topics):
-        lg.admit([{"kind": "fact", "text": topic, "confidence": 0.7}], "pass", 20 + i, [22])
+        # All minted AFTER the poisoned observation at 22, so none has independent prior support.
+        lg.admit([{"kind": "fact", "text": topic, "confidence": 0.7}], "pass", 23 + i, [22])
     assert len(lg.entries) == 6, "distinct texts must not dedupe"
     audit = lg.audit((21, 31), {22}, 20)
     assert len(audit.evicted) == 6 and audit.retained == []
@@ -241,3 +242,31 @@ def test_seeding_decays_confidence_and_refuses_tainted_rows(tmp_path: Path) -> N
 
 def test_seeding_from_a_missing_file_is_a_no_op(tmp_path: Path) -> None:
     assert Ledger("run-3").seed_from(tmp_path / "nope.jsonl") == 0
+
+
+def test_knowledge_established_before_the_poison_survives_being_restated() -> None:
+    """Evidence merges on re-observation, so a clean entry accumulates poisoned seqs.
+
+    Re-confirming something true must not be enough to destroy it. What settles it is when the
+    entry was first minted, which is immutable and part of its id.
+    """
+    lg = ledger()
+    lg.admit([FACT], "pass", 10, [9])
+    # The same fact restated in a window that spans the poisoned observation at 22.
+    lg.admit([FACT], "pass", 26, [20, 21, 22, 23])
+
+    entry = next(iter(lg.entries.values()))
+    assert 22 in entry.source_seqs, "the merge really did pull in the poisoned seq"
+
+    audit = lg.audit((21, 31), {22}, 20)
+    assert audit.evicted == [], "prior clean establishment must survive"
+    assert len(audit.retained) == 1
+
+
+def test_a_learning_first_minted_after_the_poison_is_evicted() -> None:
+    """The detection-lag case: the poisoned window still passes, so its false learning gets in."""
+    lg = ledger()
+    lg.admit([POISON], "pass", 26, [22, 23, 24])
+    audit = lg.audit((21, 31), {22}, 20)
+    assert len(audit.evicted) == 1
+    assert audit.evicted[0]["reason"] == "poisoned_source"

@@ -64,6 +64,7 @@ class RunController:
         runs_dir: Path,
         mode: str = "supervised",
         rollback_hook: RollbackHook | None = None,
+        injector: Any = None,
         window_steps: int = 5,
         max_steps: int = 60,
     ) -> None:
@@ -76,6 +77,7 @@ class RunController:
         self.ledger = ledger
         self.mode = mode
         self.rollback_hook = rollback_hook or _halting_hook
+        self.injector = injector
         self.window_steps = window_steps
         self.max_steps = max_steps
 
@@ -87,6 +89,7 @@ class RunController:
         self.window_start_seq = 0
         self.action_descriptions: list[str] = []
         self.current_checkpoint: str | None = None
+        self.checkpoint_steps: dict[str, int] = {}
         self.last_progress: ProgressResult | None = None
 
     # -- lifecycle ------------------------------------------------------------
@@ -129,6 +132,9 @@ class RunController:
 
     def step_once(self) -> bool:
         """One agent step plus, when the window closes, one verification. False = no more steps."""
+        if self.injector is not None and self.injector.should_fire(self.step_count + 1):
+            self.injector.fire(self, self.step_count + 1)
+
         result = self.adapter.step(self.handle, execute=True)
         if result is None:
             if self._window_open():
@@ -164,12 +170,17 @@ class RunController:
 
     def _execute_tool(self, result: Any) -> dict[str, Any]:
         call = self.task_pack.call_tool(result.tool, result.args, self.workdir)
+        if self.injector is not None:
+            call = self.injector.intercept(result.tool, call)
         payload: dict[str, Any] = {
             "tool": result.tool,
             "result_digest": _digest({"content": call.content[:400], "ok": call.ok}),
             "poisoned": bool(call.meta.get("poisoned", False)),
         }
         if result.tool == "run_tests":
+            # The supervisor always reads real progress -- that is the whole point of an
+            # independent signal. The AGENT sees whatever the tool returned, poisoned or not,
+            # which is exactly the asymmetry scenario S2 exists to demonstrate.
             progress = self.task_pack.progress(self.workdir)
             self.last_progress = progress
             payload["progress"] = progress.model_dump(mode="json")
@@ -275,6 +286,7 @@ class RunController:
         confirmed = self.checkpointer.confirm_previous_excluding(checkpoint.id)
 
         self.current_checkpoint = checkpoint.id
+        self.checkpoint_steps[checkpoint.id] = self.step_count
         self.store.emit(
             "checkpoint",
             {
