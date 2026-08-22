@@ -151,12 +151,12 @@ build + one verifier. Rationale: a Phase 2 module that comes back wrong is cheap
 triple to pre-verify it is bad economics against a 7 PM gate. This is a deliberate change from how Phase 0
 was run.
 
-## D11 — Three bugs that only a live judge could find
+## D11 — Four bugs that only a live judge could find
 
 Every unit test in this build uses a mocked provider, which is correct: it keeps the suite fast,
 free, and deterministic. But a mock returns a scripted alignment **regardless of what the window
 actually contains**, so an empty window looks identical to a full one, and a looping agent looks
-identical to a productive one. Three demo-breaking defects were invisible to 186 passing tests and
+identical to a productive one. Four demo-breaking defects were invisible to a fully green test suite and
 surfaced within minutes of watching a real judge score real windows:
 
 1. **Verifying an empty window.** When the agent's script ran out, the controller verified the
@@ -176,11 +176,19 @@ surfaced within minutes of watching a real judge score real windows:
    a loop — breaching and discarding the work that had just succeeded.
    *Fix:* take the recovery path once, then resume in place.
 
+4. **Checkpoints minted inside the discarded range survived a rollback.** Confirmation walks the
+   chain by recency, not by whether a checkpoint still belongs to the live trajectory — so a
+   passing window *after* recovery confirmed a snapshot taken *during* the corruption, making it a
+   valid future rollback target. A second breach then rolled back into the exact state the first
+   rollback had removed. The confirmed-checkpoint rule was necessary but not sufficient.
+   *Fix:* a rollback truncates the chain at its target and records what it invalidated.
+
 **The pattern worth carrying forward:** none of the three was a supervisor bug. The supervisor
 scored exactly what it was shown — an empty transcript, a stale baseline, a genuine loop. Every fix
-was to stop showing it something misleading. Two of the three were the same underlying mistake:
-**state that outlived the trajectory it described.** If the swarm tier is ever built, that is the
-first thing to audit, because a swarm multiplies the number of trajectories that can end.
+was to stop showing it something misleading. And **all four** were the same underlying mistake: **state that outlived the trajectory it
+described** — the warn streak, the progress baseline, the recovery cursor, and the checkpoint chain.
+Four for four makes it the first thing to audit in anything built on this, and it matters most for a
+swarm, where every member has a trajectory that can end independently.
 
 **Practical consequence:** mocked tests verify mechanism; they cannot verify *judgement under real
 input*. Budget time to watch live runs before a demo, and read the judge's rationale strings rather
