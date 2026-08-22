@@ -144,6 +144,19 @@ end to end, no mocks anywhere in the path:
 Exactly one breach, one rollback, and 12/12 on recovery — while carrying seven verified learnings
 across the rollback and dropping the three that traced to the corruption.
 
+## The twin result, live
+
+Same task, same injection, same schedule. The only variable is whether the supervisor may act:
+
+| arm | final | breaches detected | rollbacks |
+|---|---|---|---|
+| **supervised** | **12/12** | 1 | 1 |
+| unsupervised | **0/12** | 2 | 0 |
+
+The unsupervised arm is not blind — it computes coherence identically and records both breaches. It
+simply never intervenes, so the drifting agent's rewritten public API stands and every test fails.
+That is the control arm doing its job: it makes the supervised result evidence rather than assertion.
+
 ## Reproducing
 
 ```bash

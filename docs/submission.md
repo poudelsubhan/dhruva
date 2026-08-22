@@ -108,6 +108,18 @@ the verifier is never grading the model family that produced the work.
 - Repository: https://github.com/poudelsubhan/dhruva
 - Demo video: _to be recorded_
 
+## The twin
+
+Supervised versus unsupervised on an identical task and injection schedule, live, on real models:
+
+| arm | final | breaches detected | rollbacks |
+|---|---|---|---|
+| **supervised** | **12/12** | 1 | 1 |
+| unsupervised | **0/12** | 2 | 0 |
+
+The control arm computes coherence identically and records both breaches — it just never
+intervenes. The drifting agent's rewritten public API stands, and every test fails.
+
 ## Measured result
 
 Eviction is only worth claiming if it is *precise*. Three policies scored over the same event log,
