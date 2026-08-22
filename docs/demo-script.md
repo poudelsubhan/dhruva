@@ -1,95 +1,98 @@
-# Demo script — 3 minutes
+# Run of show — 3 minutes
 
-**Before you start:** `make dev`, browser on http://localhost:5173, scenario **S2** selected,
-**at step 12**. Have `make demo-all` already run once in a terminal behind you — if the live path
-misbehaves, that terminal is your fallback and it takes ten seconds to switch to.
+**2 minutes of slides, 1 minute of live demo, demo in the middle.**
+
+Deck: `docs/dhruva.pptx` (7 slides, 16:9). Demo: the browser, already on
+`http://localhost:5173/?demo=1`.
 
 ---
 
-### 0:00 — The problem (20s)
+## Setup, before you're on
 
-> "Long-horizon agents don't crash. They drift. A tool lies, a constraint gets compacted away — and
-> the agent keeps working, confidently, on the wrong thing. You find out an hour later.
+```bash
+make dev
+```
+
+Open `http://localhost:5173/?demo=1` in a second window or tab. It boots straight into the canned
+replay, **paused at event 1**. Nothing runs until you press play.
+
+Check the top-right pill says a provider is configured, then leave it alone. The replay does not
+touch the network — it replays a real log from disk, so nothing on stage depends on an API call.
+
+**Controls:** `space` plays/pauses. `R` restarts. The label beside the scrubber names the beat
+you're on, so you can always see where you are without reading the timeline.
+
+---
+
+## Slides 1–3 · ~60 seconds
+
+**Slide 1 — Dhruva.**
+> "Dhruva is a supervisor that catches an agent losing the plot, rolls it back, and keeps what it
+> learned."
+
+**Slide 2 — the problem.**
+> "Long-horizon agents don't crash. They drift. A tool lies, a constraint gets compacted away, and
+> the agent keeps working — confidently — on the wrong thing.
 >
-> The obvious fix is rollback. But rollback has a cost nobody prices in: it's *lossy*. You revert
-> the tree and you also destroy everything the agent legitimately learned. It re-derives it, and
-> often re-walks the same dead ends."
+> Rollback is the obvious fix. But rollback is *lossy*. You revert the tree and you also destroy
+> everything the agent legitimately learned. It re-derives it, and often re-walks the same dead
+> ends."
 
-### 0:20 — Start the run (15s)
+**Slide 3 — the mechanism.**
+> "So we separate the two. Work state is checkpointed and restorable. Knowledge is append-only and
+> taint-tracked. On a breach the tree reverts — and the knowledge doesn't, except for whatever
+> provenance traces back to the corruption."
 
-Click **run with scenario**. Point at the header while it spins up.
+---
 
-> "The agent's on Sonnet. The judge is on GPT-5-mini — deliberately a different family, so the
-> verifier is never grading the model that produced the work."
+## Demo · ~60 seconds
 
-### 0:35 — Clean progress (30s)
+Switch to the browser. **Press space.**
 
-Point at the twelve-lamp board as group A fills, then B.
+**0–20s** — while the lamps fill in:
+> "Twelve tests, three independent groups. That board is an objective signal — not the agent's
+> opinion of itself. The dial is composite coherence. Checkpoints accrue as windows pass."
 
-> "Twelve tests, three independent groups. That board is the objective signal — not the agent's
-> opinion of itself. The dial is composite coherence: alignment from the judge, plus repetition and
-> progress, which are pure arithmetic. Two of the three terms can't be argued with."
+**~25s, the injection lands** (label reads *corruption injected*, lamps drop to 0/12):
+> "There's the corruption. The agent's been told to rewrite the public API, and it just did — every
+> test fails."
 
-Point at the checkpoint chain.
+**~35s, the poisoned window still passes:**
+> "And notice the supervisor doesn't catch it yet. That window still scores as coherent. Drift takes
+> a window to become visible — and in the meantime the agent banks a *false* belief."
 
-> "Checkpoints are hash-chained and only minted after a passing window. And notice — *confirmed*.
-> A checkpoint only becomes a valid rollback target once the window *after* it also passes.
-> Otherwise you can roll back into the corruption."
+**~45s, breach and rollback arc:**
+> "Now it's caught. Rollback to the last confirmed checkpoint."
 
-### 1:05 — The injection (25s)
+**Point at the ledger panel — this is the frame:**
+> "But look: it didn't wipe the agent's memory. It kept the learnings that were established before
+> the corruption and evicted the ones sourced from it. That's the whole idea — **rollback without
+> amnesia**."
 
-The `injection` glyph appears, then the poisoned observation.
-
-> "There's the corruption. The test runner just lied — it reported all twelve green."
-
-**Pause. Let the next window pass.**
-
-> "And watch: the supervisor *doesn't* catch it yet. That window still scores as coherent, because
-> the agent is doing plausible work and the falsified result agrees with it. It even banks a new
-> belief: *the suite passes, the module is complete*. That's the honest part — drift takes a window
-> to become visible, and by then the false belief is already in the ledger."
-
-### 1:30 — The breach (20s)
-
-Coherence collapses. Red.
-
-> "Now it's caught. Coherence drops through the floor, and the supervisor halts stepping."
-
-### 1:50 — **The frame** (40s)
-
-The rollback arc fires. Point at the ledger panel.
-
-> "Rollback to the last confirmed checkpoint. The tree reverts — you can watch four lamps go dark.
->
-> But look at the ledger. **Seven learnings kept. Three evicted.** It didn't wipe the agent's
-> memory. It traced provenance: anything sourced from that poisoned observation is gone, and
-> everything the agent genuinely figured out before the corruption survives — and gets re-injected
-> into the rebuilt context, along with an explicit note that it was wrong about the suite passing.
->
-> That's the whole idea. **Rollback without amnesia.**"
-
-Point at the pre-flight verification.
-
-> "And before it's allowed to resume, it has to *propose* its next step and have that checked
-> against the original intent. It doesn't get to act first."
-
-### 2:30 — Recovery and the number (25s)
-
-Lamps relight, run completes 12/12.
-
+**~60s, recovery:**
 > "Back to twelve out of twelve."
 
-Switch to the terminal (`make measure`).
+If you're running long, press `R` and skip to the slides — the numbers are on slide 5 anyway.
 
-> "And this is the claim, measured rather than asserted. Three eviction policies over the same log.
-> Keep everything: you carry the false belief forward. Evict the whole discarded range — which is
-> what rollback means without provenance — you destroy clean knowledge. Provenance-based eviction
-> is the only one that's correct on both axes."
+---
 
-### 2:55 — Close (10s)
+## Slides 5–7 · ~60 seconds
 
-> "Framework-agnostic — three adapter seams, so it wraps whatever loop you've got. Everything you
-> saw came off one append-only event log, which is also what the replay renders from."
+**Slide 5 — the twin.**
+> "Same task, same corruption, same schedule. The only variable is whether the supervisor is allowed
+> to act. Supervised recovers to twelve out of twelve. Unsupervised ends at zero.
+>
+> And the unsupervised arm isn't blind — it scores the drift identically. It just never intervenes."
+
+**Slide 6 — the measured claim.**
+> "Eviction has to be *precise*, or it's just amnesia with extra steps. Three policies over the same
+> log. Keep everything, and you carry the lie forward. Evict the whole discarded range — which is
+> what rollback means without provenance — and you destroy knowledge the agent earned. Only
+> provenance-based eviction is correct on both counts."
+
+**Slide 7 — close.**
+> "Framework-agnostic: three adapter seams. And everything you saw comes off one append-only event
+> log — the live view, the provenance graph, the twin, and the replay you just watched."
 
 ---
 
@@ -97,26 +100,25 @@ Switch to the terminal (`make measure`).
 
 | symptom | do this |
 |---|---|
-| Run stalls or the provider errors | Switch to the terminal, `make demo-all` — same arc, offline, deterministic |
-| UI looks wrong | **mock breach** button — pre-recorded log, same render path |
-| Judge is slow | Keep talking through the mechanism; the lamps and chain are still updating |
-| Asked "is this real?" | `GET /api/runs/{id}/events` is the raw log. Everything on screen derives from it. |
+| Replay won't load | `make demo` in a terminal — same arc, prints the trace, no browser |
+| Browser is wrong | Reload `?demo=1`. It always starts paused at event 1. |
+| Ran long | `R`, then straight to slide 5. The numbers carry the point. |
+| Asked "is this live?" | Say plainly: it's a replay of a real run, from that run's own event log. Offer `run with scenario` to do it live — it takes a few minutes. |
 
-## Questions you should expect
+## Questions to expect
 
-**"How is this different from just retrying?"** A retry restarts from the same corrupted context.
-This restores a verified *state*, rebuilds the context from a compressed intent, and gates the
-resume on a pre-flight check. And it keeps the knowledge.
+**"How is this different from retrying?"** A retry restarts from the same corrupted context. This
+restores a verified state, rebuilds context from a compressed intent, gates the resume on a
+pre-flight check of the agent's *proposed* next step — and keeps the knowledge.
 
-**"Doesn't the judge cost a call per window?"** One, and learning extraction rides the same call —
-no extra latency. The taint audit on the rollback path is pure arithmetic: no model call at all,
-because that path must not stall.
+**"What does the judge cost?"** One call per window, and learning extraction rides the same call.
+The taint audit on the rollback path is pure arithmetic — no model call, because that path must not
+stall.
 
-**"What if the judge is wrong?"** It's 0.6 of the score; the other 0.4 is arithmetic. A judge
-failure degrades to a neutral prior rather than a breach. And ground truth — the test suite — is
-hash-verified against a baseline, so the one scenario that attacks the metric gets caught
-independently of any model.
+**"What if the judge is wrong?"** It's 0.6 of the score; the rest is arithmetic. A judge failure
+degrades to a neutral prior, not a breach. And ground truth — the test suite — is hash-verified
+against a baseline, so the scenario that attacks the metric gets caught independently of any model.
 
-**"Does it work with N agents?"** Contracts carry `agent_id`/`swarm_id` and reserve the swarm event
-types. The ledger is what makes it cheap: cross-agent divergence shows up as a contradiction against
-the shared ledger head, which is O(N) per barrier rather than O(N²). Not built today — deliberately.
+**"Does it work with multiple agents?"** The contracts carry `agent_id`/`swarm_id` and reserve the
+swarm event types; the ledger is what would make it cheap, since cross-agent divergence shows up as
+a contradiction against the shared ledger head. Not built — deliberately out of scope for today.

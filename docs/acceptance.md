@@ -166,6 +166,21 @@ in both, so *onset* of decay is identical by construction. What separates the ar
 onset — which is what the curve shows and what the final scores measure. The half-life is the
 plan's specified metric and is computed correctly; it simply is not the discriminating one here.
 
+## Phase 4 — threshold calibration
+
+Run by `scripts/calibrate.py` over three clean, injection-free runs (the plan's phase-open
+procedure):
+
+```
+  windows: 15   min 0.708   mean 0.760   max 0.851
+  rule: breach = min - 0.10 = 0.608   warn = min - 0.05 = 0.658
+```
+
+Before this, `warn` sat at 0.700 — **0.008 under the clean minimum.** A correct run was one judge
+sample away from a warn, and two warns escalate to a breach. Now calibrated with a 0.05 margin and
+pinned by `test_production_thresholds_sit_below_what_clean_runs_produce`, so it cannot silently
+regress. Drift still trips at C = 0.223, well clear of the new floor.
+
 ## Reproducing
 
 ```bash
