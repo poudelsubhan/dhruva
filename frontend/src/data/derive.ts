@@ -51,6 +51,14 @@ export interface RollbackSpan {
   discarded: [number, number]
 }
 
+export interface ActionLine {
+  seq: number
+  step: number
+  text: string
+  tool: string
+  poisoned: boolean
+}
+
 export interface DerivedRun {
   coherence: CoherencePoint[]
   latest: CoherencePoint | null
@@ -69,6 +77,13 @@ export interface DerivedRun {
   /** Convenience for panel headers. */
   rollbacksCount: number
   passing: number
+  /** What the AGENT believes, from the tool's own claims. Diverges from `progress` when it lied. */
+  agentProgress: ProgressResult | null
+  believed: number
+  /** The lie, verbatim, as the agent received it. */
+  poisonedContent: string | null
+  actions: ActionLine[]
+  evictedIds: string[]
 }
 
 export function derive(events: readonly DhruvaEvent[]): DerivedRun {
@@ -82,6 +97,9 @@ export function derive(events: readonly DhruvaEvent[]): DerivedRun {
   const poisonedSeqs: number[] = []
   const breaches: number[] = []
   let progress: ProgressResult | null = null
+  let agentProgress: ProgressResult | null = null
+  let poisonedContent: string | null = null
+  const actions: ActionLine[] = []
   let complete: DerivedRun['complete'] = null
   let testsTampered = false
 
@@ -142,9 +160,22 @@ export function derive(events: readonly DhruvaEvent[]): DerivedRun {
       audits.push({ ...event.payload, seq: event.seq })
     } else if (isEvent('injection')(event)) {
       injections.push({ scenario: event.payload.scenario, seq: event.seq })
+    } else if (isEvent('action')(event)) {
+      actions.push({
+        seq: event.seq,
+        step: event.payload.step,
+        text: event.payload.description,
+        tool: event.payload.tool,
+        poisoned: false,
+      })
     } else if (isEvent('observation')(event)) {
-      if (event.payload.poisoned) poisonedSeqs.push(event.seq)
+      if (event.payload.poisoned) {
+        poisonedSeqs.push(event.seq)
+        if (event.payload.content) poisonedContent = event.payload.content
+        if (actions.length) actions[actions.length - 1].poisoned = true
+      }
       if (event.payload.progress) progress = event.payload.progress
+      if (event.payload.agent_progress) agentProgress = event.payload.agent_progress
     } else if (isEvent('breach')(event)) {
       breaches.push(event.seq)
     } else if (isEvent('task_complete')(event)) {
@@ -206,6 +237,13 @@ export function derive(events: readonly DhruvaEvent[]): DerivedRun {
     testsTampered,
     rollbacksCount: arcs.length,
     passing,
+    agentProgress,
+    believed: agentProgress
+      ? Object.values(agentProgress.per_test).filter((v) => v === 'pass').length
+      : passing,
+    poisonedContent,
+    actions,
+    evictedIds: audits.flatMap((a) => a.evicted.map((e) => e.entry_id)),
   }
 }
 

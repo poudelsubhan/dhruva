@@ -79,7 +79,15 @@
           "tool": { "type": "string" },
           "result_digest": { "type": "string" },
           "poisoned": { "type": "boolean", "description": "Fixture ground truth. Drives UI truth-marking and is the provenance signal the ledger taint audit keys on — never inferred." },
-          "progress": { "$ref": "#/$defs/ProgressResult" }
+          "progress": { "$ref": "#/$defs/ProgressResult", "description": "What is ACTUALLY true, measured by the supervisor independently of the tool." },
+          "content": {
+            "type": ["string", "null"], "default": null,
+            "description": "What the agent actually saw, verbatim and truncated. Without this the lie itself is unrecoverable from the log — only its digest — and the most important moment in the system is invisible."
+          },
+          "agent_progress": {
+            "$ref": "#/$defs/ProgressResult",
+            "description": "What the agent would conclude from `content`. Equals `progress` on a clean run; diverges from it exactly when the tool lied."
+          }
         }
       },
       "memory_op": {

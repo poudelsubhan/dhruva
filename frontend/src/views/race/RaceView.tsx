@@ -34,41 +34,48 @@ export const STAGES: { key: Exclude<RollbackStage, null>; label: string; detail:
   { key: 'preflight', label: 'PRE-FLIGHT', detail: 'next step checked before it may run' },
 ]
 
-const GROUP_OF = (nodeId: string): 'A' | 'B' | 'C' => {
-  if (nodeId.includes('ingest') || nodeId.includes('parser')) return 'A'
-  if (nodeId.includes('metrics') || nodeId.includes('sessions')) return 'B'
-  return 'C'
-}
-
-function Lamps({ perTest, dim }: { perTest: Record<string, 'pass' | 'fail'>; dim: boolean }) {
-  const entries = Object.entries(perTest)
-  const groups: Record<string, [string, string][]> = { A: [], B: [], C: [] }
-  for (const [id, outcome] of entries) groups[GROUP_OF(id)].push([id, outcome])
-  const empty = entries.length === 0
-
+/** One row of twelve. Compact enough that two rows fit inside a pane. */
+function Board({
+  perTest,
+  label,
+  count,
+  tone,
+}: {
+  perTest: Record<string, 'pass' | 'fail'>
+  label: string
+  count: number
+  tone: 'truth' | 'belief'
+}) {
+  const cells = Object.values(perTest)
+  const filled = cells.length ? cells : Array.from({ length: 12 }, () => 'fail' as const)
   return (
-    <div className={clsx('flex flex-col gap-2 transition-opacity', dim && 'opacity-40')}>
-      {(['A', 'B', 'C'] as const).map((g) => (
-        <div key={g} className="flex items-center gap-2">
-          <span className="w-3 font-mono text-micro text-ink-muted">{g}</span>
-          <div className="flex gap-2">
-            {(empty ? Array.from({ length: 4 }, () => ['', 'fail'] as [string, string]) : groups[g]).map(
-              ([id, outcome], i) => (
-                <span
-                  key={id || i}
-                  title={id}
-                  className={clsx(
-                    'h-7 w-14 rounded-mark border transition-all duration-500',
-                    outcome === 'pass'
-                      ? 'border-state-pass bg-state-pass shadow-[0_0_18px_-2px] shadow-state-pass'
-                      : 'border-edge-default bg-base-700',
-                  )}
-                />
-              ),
+    <div className="flex items-center gap-3">
+      <span className="w-20 shrink-0 font-mono text-micro tracking-[0.14em] text-ink-muted uppercase">
+        {label}
+      </span>
+      <div className="flex gap-1">
+        {filled.slice(0, 12).map((outcome, i) => (
+          <span
+            key={i}
+            className={clsx(
+              'h-5 w-5 rounded-[3px] border transition-all duration-500',
+              outcome === 'pass'
+                ? tone === 'belief'
+                  ? 'border-state-warn bg-state-warn/80'
+                  : 'border-state-pass bg-state-pass'
+                : 'border-edge-default bg-base-700',
             )}
-          </div>
-        </div>
-      ))}
+          />
+        ))}
+      </div>
+      <span
+        className={clsx(
+          'ml-auto font-mono text-body font-bold tabular-nums',
+          tone === 'belief' ? 'text-state-warn' : count === 12 ? 'text-state-pass' : 'text-ink-primary',
+        )}
+      >
+        {count}/12
+      </span>
     </div>
   )
 }
@@ -78,104 +85,124 @@ function Pane({
   events,
   seq,
   accent,
-  dim,
   note,
+  evictedOverride,
 }: {
   title: string
   events: readonly DhruvaEvent[]
   seq: number
   accent: 'coherence' | 'alarm'
-  dim: boolean
   note: string | null
+  /** Applied while the audit beat is held, before its event has been reached by the clock. */
+  evictedOverride?: readonly string[]
 }) {
   const shown = useMemo(() => events.filter((e) => e.seq <= seq), [events, seq])
   const d = useMemo(() => derive(shown), [shown])
-  const passing = d.progress
-    ? Object.values(d.progress.per_test).filter((v) => v === 'pass').length
-    : 0
-  const coherence = d.latest?.coherence ?? null
-  const verdict = d.latest?.verdict ?? null
-  const breached = d.breaches.length > 0
-  const rolledBack = d.arcs.length > 0
-  const complete = d.complete
+  const deceived = d.believed !== d.passing
+  const evicted = new Set(evictedOverride ?? d.evictedIds)
+  const feed = d.actions.slice(-3)
+  const beliefs = useMemo(() => {
+    const gone = d.learnings.filter((l) => evicted.has(l.entryId))
+    const kept = d.learnings.filter((l) => !evicted.has(l.entryId))
+    // Evicted first: the strike-through IS the audit, and burying it defeats the beat.
+    return gone.length ? [...gone.slice(-3), ...kept.slice(-1)] : kept.slice(-4)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [d.learnings, d.evictedIds, evictedOverride])
 
   return (
     <section
       className={clsx(
-        'flex min-w-0 flex-1 flex-col gap-5 rounded-panel border bg-base-800 p-6 transition-all duration-500',
+        'flex min-w-0 flex-1 flex-col gap-2.5 rounded-panel border bg-base-800 p-3.5 transition-all duration-500',
         accent === 'coherence' ? 'border-coherence-400/40' : 'border-alarm-400/40',
-        breached && !rolledBack && 'border-alarm-400',
+        deceived && 'border-state-warn',
       )}
     >
       <header className="flex items-baseline justify-between gap-3">
         <h2
           className={clsx(
-            'font-mono text-lead font-semibold tracking-[0.2em] uppercase',
+            'font-mono text-small font-semibold tracking-[0.2em] uppercase',
             accent === 'coherence' ? 'text-coherence-400' : 'text-alarm-400',
           )}
         >
           {title}
         </h2>
         <span className="font-mono text-micro text-ink-muted">
-          {rolledBack ? `${d.arcs.length} rollback` : 'no intervention'}
+          C {d.latest ? d.latest.coherence.toFixed(2) : '—'}
+          {d.rollbacksCount ? ` · ${d.rollbacksCount} rollback` : ''}
         </span>
       </header>
 
-      <div className="flex items-end gap-6">
-        <div>
-          <div
-            className={clsx(
-              'font-mono text-readout leading-none font-bold tabular-nums transition-colors duration-500',
-              passing === 12 ? 'text-state-pass' : passing === 0 ? 'text-alarm-400' : 'text-ink-primary',
-            )}
-          >
-            {passing}
-            <span className="text-ink-muted">/12</span>
-          </div>
-          <div className="mt-1 font-mono text-micro tracking-[0.18em] text-ink-muted uppercase">
-            tests passing
-          </div>
-        </div>
-        <div className="ml-auto text-right">
-          <div
-            className={clsx(
-              'font-mono text-title leading-none tabular-nums transition-colors duration-500',
-              verdict === 'breach'
-                ? 'text-alarm-400'
-                : verdict === 'warn'
-                  ? 'text-state-warn'
-                  : 'text-coherence-400',
-            )}
-          >
-            {coherence === null ? '—' : coherence.toFixed(2)}
-          </div>
-          <div className="mt-1 font-mono text-micro tracking-[0.18em] text-ink-muted uppercase">
-            coherence
-          </div>
-        </div>
-      </div>
-
-      <Lamps perTest={d.progress?.per_test ?? {}} dim={dim} />
-
-      <div className="mt-auto flex min-h-14 flex-col justify-end gap-1">
-        {note ? (
-          <p
-            className={clsx(
-              'font-mono text-body tracking-[0.06em]',
-              accent === 'coherence' ? 'text-coherence-400' : 'text-alarm-400',
-            )}
-          >
-            {note}
+      <div className="flex flex-col gap-1.5 rounded-mark bg-base-900/60 p-3">
+        <Board
+          perTest={d.agentProgress?.per_test ?? d.progress?.per_test ?? {}}
+          label="believes"
+          count={d.believed}
+          tone="belief"
+        />
+        <Board
+          perTest={d.progress?.per_test ?? {}}
+          label="truth"
+          count={d.passing}
+          tone="truth"
+        />
+        {deceived ? (
+          <p className="pt-1 font-mono text-micro tracking-[0.1em] text-state-warn uppercase">
+            ▲ the agent has been lied to
           </p>
         ) : null}
-        <p className="font-mono text-micro text-ink-muted">
-          {d.learnings.length} learnings
-          {d.audits.length
-            ? ` · ${d.audits.at(-1)!.retained.length} kept, ${d.audits.at(-1)!.evicted.length} evicted`
-            : ''}
-          {complete ? ` · ${complete.success ? 'complete' : 'failed'}` : ''}
-        </p>
       </div>
+
+      <div className="flex min-h-[4rem] flex-col gap-0.5 font-mono text-micro">
+        {feed.length === 0 ? <span className="text-ink-muted">waiting…</span> : null}
+        {feed.map((a, i) => (
+          <div
+            key={a.seq}
+            className={clsx(
+              'truncate',
+              i === feed.length - 1 ? 'text-ink-primary' : 'text-ink-muted',
+              a.poisoned && 'text-state-warn',
+            )}
+          >
+            <span className="text-ink-muted">{a.step}› </span>
+            {a.text}
+            {a.poisoned ? ' ← lied to' : ''}
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-auto flex min-h-[5rem] flex-col gap-0.5">
+        <span className="font-mono text-micro tracking-[0.14em] text-ink-muted uppercase">
+          knowledge
+        </span>
+        {beliefs.length === 0 ? (
+          <span className="font-mono text-micro text-ink-muted">nothing learned yet</span>
+        ) : null}
+        {beliefs.map((b) => (
+          <div
+            key={b.entryId}
+            className={clsx(
+              'truncate text-micro',
+              evicted.has(b.entryId)
+                ? 'text-alarm-400 line-through decoration-alarm-400'
+                : 'text-ink-secondary',
+            )}
+          >
+            {evicted.has(b.entryId) ? '✕ ' : '• '}
+            {b.text}
+          </div>
+        ))}
+      </div>
+
+      {note ? (
+        <p
+          className={clsx(
+            'font-mono text-small tracking-[0.06em]',
+            accent === 'coherence' ? 'text-coherence-400' : 'text-alarm-400',
+          )}
+        >
+          {note}
+        </p>
+      ) : null}
     </section>
   )
 }
@@ -198,6 +225,21 @@ export default function RaceView({ supervised, unsupervised, seq, stage = null }
   // it reads "rolled back · resumed" during HALT, which is ahead of itself.
   const stageNote = stage ? STAGES.find((x) => x.key === stage)!.label : null
 
+  // The lie, verbatim, once it has landed. It is the same in both runs, so it belongs across the
+  // top rather than duplicated -- and it is the single most important thing on the screen.
+  const supDerived = useMemo(() => derive(supervised.filter((e) => e.seq <= seq)), [supervised, seq])
+  const lie = supDerived.poisonedContent
+  const truthLine = `${supDerived.passing}/12 actually passing`
+
+  // Once the audit beat is reached, strike the evicted beliefs even though the audit event itself is
+  // a seq or two ahead of where the clock is held.
+  const stageEvicted = useMemo(() => {
+    if (stage !== 'audit' && stage !== 'preflight') return undefined
+    const all = derive(supervised).audits
+    const a = all.filter((x) => x.rollback_ref <= seq + 2).at(-1) ?? all.at(-1)
+    return a?.evicted.map((e) => e.entry_id)
+  }, [stage, supervised, seq])
+
   return (
     <div className="relative flex flex-col gap-4">
       <div className="flex items-center justify-between font-mono text-micro tracking-[0.18em] text-ink-muted uppercase">
@@ -206,6 +248,7 @@ export default function RaceView({ supervised, unsupervised, seq, stage = null }
       </div>
 
       {stage ? <StageBand stage={stage} supervised={supervised} seq={seq} /> : null}
+      {lie ? <TheLie content={lie} truth={truthLine} /> : null}
 
       <div className="flex flex-row gap-4">
         <Pane
@@ -213,17 +256,39 @@ export default function RaceView({ supervised, unsupervised, seq, stage = null }
           events={supervised}
           seq={seq}
           accent="coherence"
-          dim={false}
           note={stageNote ?? supNote}
+          evictedOverride={stageEvicted}
         />
         <Pane
           title="unsupervised"
           events={unsupervised}
           seq={seq}
           accent="alarm"
-          dim={false}
           note={unsNote}
         />
+      </div>
+    </div>
+  )
+}
+
+/** What the tool told the agent, next to what was true. */
+function TheLie({ content, truth }: { content: string; truth: string }) {
+  const lines = content.trim().split('\n')
+  const summary = lines[lines.length - 1] ?? ''
+  return (
+    <div className="flex items-stretch gap-3 rounded-panel border border-state-warn/60 bg-state-warn/5 px-4 py-2">
+      <div className="min-w-0 flex-1">
+        <div className="font-mono text-micro tracking-[0.16em] text-state-warn uppercase">
+          what the tool reported
+        </div>
+        <div className="truncate font-mono text-body text-state-warn">{summary}</div>
+      </div>
+      <div className="w-px bg-state-warn/30" />
+      <div className="min-w-0 flex-1">
+        <div className="font-mono text-micro tracking-[0.16em] text-ink-muted uppercase">
+          what was true
+        </div>
+        <div className="truncate font-mono text-body text-alarm-400">{truth}</div>
       </div>
     </div>
   )
@@ -241,14 +306,15 @@ function StageBand({
 }) {
   const meta = STAGES.find((s) => s.key === stage)!
   const index = STAGES.findIndex((s) => s.key === stage)
-  const audit = useMemo(
-    () => derive(supervised.filter((e) => e.seq <= Math.max(seq, 64))).audits.at(-1) ?? null,
-    [supervised, seq],
-  )
+  const audit = useMemo(() => {
+    const all = derive(supervised)
+    const forThisRollback = all.audits.filter((a) => a.rollback_ref <= seq + 2)
+    return forThisRollback.at(-1) ?? all.audits.at(-1) ?? null
+  }, [supervised, seq])
 
   return (
-    <div className="rounded-panel border border-coherence-400 bg-coherence-400/5 px-6 py-4">
-      <div className="flex flex-col gap-3">
+    <div className="rounded-panel border border-coherence-400 bg-coherence-400/5 px-4 py-2.5">
+      <div className="flex flex-col gap-2">
         <div className="flex items-center gap-3">
           {STAGES.map((s, i) => (
             <span
@@ -260,33 +326,19 @@ function StageBand({
             />
           ))}
         </div>
-        <div className="flex flex-wrap items-baseline gap-4">
-          <h3 className="font-mono text-title font-bold tracking-[0.12em] text-coherence-400 uppercase">
+        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+          <h3 className="font-mono text-body font-bold tracking-[0.12em] text-coherence-400 uppercase">
             {meta.label}
           </h3>
-          <p className="text-body text-ink-secondary">{meta.detail}</p>
+          <p className="text-small text-ink-secondary">{meta.detail}</p>
+          {stage === 'audit' && audit ? (
+            <span className="ml-auto font-mono text-body font-bold">
+              <span className="text-state-pass">{audit.retained.length} kept</span>
+              <span className="text-ink-muted"> · </span>
+              <span className="text-alarm-400">{audit.evicted.length} evicted</span>
+            </span>
+          ) : null}
         </div>
-
-        {stage === 'audit' && audit ? (
-          <div className="grid grid-cols-2 gap-4">
-            <div className="rounded-mark border border-state-pass/40 bg-state-pass/5 p-4">
-              <div className="font-mono text-display font-bold text-state-pass">
-                {audit.retained.length}
-              </div>
-              <div className="font-mono text-micro tracking-[0.16em] text-ink-muted uppercase">
-                learnings kept
-              </div>
-            </div>
-            <div className="rounded-mark border border-alarm-400/40 bg-alarm-400/5 p-4">
-              <div className="font-mono text-display font-bold text-alarm-400">
-                {audit.evicted.length}
-              </div>
-              <div className="font-mono text-micro tracking-[0.16em] text-ink-muted uppercase">
-                traced to the sabotage — evicted
-              </div>
-            </div>
-          </div>
-        ) : null}
       </div>
     </div>
   )

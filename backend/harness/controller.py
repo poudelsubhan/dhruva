@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol, cast
 
 from backend.checkpoint import Checkpointer
 from backend.contracts import IntentDigest, ProgressResult
@@ -176,8 +176,13 @@ class RunController:
             "tool": result.tool,
             "result_digest": _digest({"content": call.content[:400], "ok": call.ok}),
             "poisoned": bool(call.meta.get("poisoned", False)),
+            # Verbatim, because the digest makes the lie unrecoverable and the lie is the point.
+            "content": call.content[:1200],
         }
         if result.tool == "run_tests":
+            # What the AGENT concludes, parsed from what it was handed. On a clean run this equals
+            # the measured truth below; when the tool lies, the gap between them is the whole story.
+            payload["agent_progress"] = _parse_reported(call.content).model_dump(mode="json")
             # The supervisor always reads real progress -- that is the whole point of an
             # independent signal. The AGENT sees whatever the tool returned, poisoned or not,
             # which is exactly the asymmetry scenario S2 exists to demonstrate.
@@ -363,6 +368,23 @@ class RunController:
         }
         self.store.emit("task_complete", payload, checkpoint_ref=self.current_checkpoint)
         self.state = RunState.DONE
+
+
+def _parse_reported(content: str) -> ProgressResult:
+    """Read a tool's own PASS/FAIL claims at face value, exactly as the agent would."""
+    per_test: dict[str, str] = {}
+    for line in content.splitlines():
+        stripped = line.strip()
+        for marker, verdict in (("PASS ", "pass"), ("FAIL ", "fail")):
+            if stripped.startswith(marker):
+                per_test[stripped[len(marker) :].strip()] = verdict
+    passed = sum(1 for v in per_test.values() if v == "pass")
+    total = len(per_test) or 1
+    return ProgressResult(
+        score=round(passed / max(total, 12), 4),
+        per_test=cast("dict[str, Literal['pass', 'fail']]", per_test),
+        tests_tampered=False,
+    )
 
 
 def _digest(value: Any) -> str:

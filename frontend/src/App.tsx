@@ -341,8 +341,8 @@ export default function App() {
     setError(null)
     try {
       const [sup, uns] = await Promise.all([
-        getCanned('s1-supervised'),
-        getCanned('s1-unsupervised'),
+        getCanned('s2-supervised'),
+        getCanned('s2-unsupervised'),
       ])
       setRace({ supervised: sup, unsupervised: uns })
       setSource({ kind: 'race' })

@@ -94,6 +94,11 @@ class ObservationPayload(Frozen):
     result_digest: str
     poisoned: bool = False
     progress: ProgressResult | None = None
+    """What is ACTUALLY true — measured by the supervisor, not reported by the tool."""
+    content: str | None = None
+    """What the agent saw, verbatim. The lie is only recoverable from the log if it is stored."""
+    agent_progress: ProgressResult | None = None
+    """What the agent would conclude. Diverges from ``progress`` exactly when the tool lied."""
 
 
 class MemoryOpPayload(Frozen):

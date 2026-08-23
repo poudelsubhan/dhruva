@@ -65,7 +65,12 @@ export interface ObservationPayload {
   result_digest: string
   /** Fixture ground truth. The taint audit keys on this — never inferred. */
   poisoned: boolean
+  /** What is ACTUALLY true — measured by the supervisor, not reported by the tool. */
   progress?: ProgressResult
+  /** What the agent saw, verbatim. Without it the lie is unrecoverable from the log. */
+  content?: string | null
+  /** What the agent concludes. Diverges from `progress` exactly when the tool lied. */
+  agent_progress?: ProgressResult
 }
 export interface MemoryOpPayload {
   op: 'read' | 'write' | 'compact'
