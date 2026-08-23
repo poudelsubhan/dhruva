@@ -51,6 +51,11 @@
   .meta { font-family:var(--mono); font-weight:500; font-size:min(1vw,.82rem);
           letter-spacing:.03em; color:var(--ink-muted); margin-top:5vh; }
   .red { color:var(--alarm); } .cy { color:var(--cy); }
+  /* The one line on slide 5 that is meant to be repeated back. It gets its own air. */
+  .alpha { font-size:min(2.4vw,1.7rem); font-weight:600; letter-spacing:-.02em;
+           color:var(--ink); margin-top:3.5vh; }
+  .close { font-size:min(2.1vw,1.5rem); font-weight:600; letter-spacing:-.02em;
+           color:var(--ink); margin-top:4vh; max-width:60ch; margin-inline:auto; }
 
   /* The turn: the second beat on a slide that carries two. A hairline, not a new slide. */
   .turn { margin:5vh auto 0; padding-top:3.5vh; border-top:1px solid var(--edge-subtle);
@@ -101,7 +106,7 @@
   <section class="slide">
     <h1>Dhruva</h1>
     <p class="thesis">Rollback without amnesia.</p>
-    <p class="lede">A supervisor for agents that run long enough to lose the plot.</p>
+    <p class="lede">Proactive intelligence for agents that run long enough to lose the plot.</p>
     <p class="meta">AGI House &middot; Long Horizon Agents &middot; 22 August 2026</p>
   </section>
 
@@ -111,9 +116,9 @@
     <p class="lede">A tool returns something false. A summary drops the one constraint that
       mattered. Nothing throws. The agent keeps working, confidently, on the wrong thing.</p>
     <div class="turn">
-      <p>Rollback is the obvious fix, and it is <strong>lossy</strong>. Revert the files and you
-        destroy what the agent legitimately figured out. It re-derives it, and walks the same
-        dead ends.</p>
+      <p>Rollback is the obvious fix, and it is <strong>lossy</strong>. Revert a commit and you
+        still remember why you wrote it. Roll an agent back and that goes too. It re-derives the
+        same facts and walks the same dead ends.</p>
     </div>
   </section>
 
@@ -140,7 +145,7 @@
 
   <section class="slide" data-beat="recover">
     <div class="kicker">Same task, same corruption, same schedule</div>
-    <h2>The only variable is whether it may act.</h2>
+    <h2>Seeing the drift was never the problem.</h2>
     <div class="cols">
       <div class="card">
         <div class="tag">Supervised</div>
@@ -153,8 +158,9 @@
         <p>2 breaches detected &middot; 0 rollbacks</p>
       </div>
     </div>
-    <p class="lede">The unsupervised arm scores the same drift and records both breaches.
-      It is not allowed to act on them.</p>
+    <p class="lede">The second run saw all of it and finished with nothing. The only thing
+      between these two numbers is permission to act.</p>
+    <p class="alpha">The alpha is in the delta.</p>
   </section>
 
   <section class="slide">
@@ -171,7 +177,8 @@
   <section class="slide">
     <h2>One event log.<br />Three adapter seams.</h2>
     <p class="lede">Every view reads that one log: live, provenance graph, twin, replay.
-      Point the seams at your own agent and your own task, and nothing above them changes.</p>
+      Point the seams at your agent and your task, and nothing above them changes.</p>
+    <p class="close">Observability explains the failure. Proactive intelligence undoes it.</p>
     <p class="meta cy">github.com/poudelsubhan/dhruva</p>
   </section>
 
