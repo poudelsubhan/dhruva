@@ -315,7 +315,7 @@ export default function App() {
     <div className="min-h-screen bg-base-900 text-ink-primary">
       <header className="flex flex-wrap items-center justify-between gap-gutter border-b border-edge-subtle px-panel py-snug">
         <div className="flex items-baseline gap-3">
-          <h1 className="text-h3 font-semibold tracking-tight">Dhruva</h1>
+          <h1 className="text-title font-semibold tracking-tight">Dhruva</h1>
           <p className="font-mono text-micro tracking-[0.18em] text-ink-muted uppercase">
             agent supervisor · flight recorder
           </p>
@@ -371,7 +371,7 @@ export default function App() {
               min={1}
               value={atStep}
               onChange={(e) => setAtStep(Number(e.target.value))}
-              className="w-20 rounded-mark border border-edge-default bg-base-900 px-2 py-2 font-mono text-small"
+              className="w-20 rounded-mark border border-edge-default bg-base-900 px-2 py-2 font-mono text-caption"
             />
           </label>
 
@@ -426,7 +426,7 @@ export default function App() {
         </section>
 
         {error ? (
-          <p className="rounded-panel border border-alarm-400/50 bg-alarm-400/10 px-panel py-snug font-mono text-small text-alarm-400">
+          <p className="rounded-panel border border-alarm-400/50 bg-alarm-400/10 px-panel py-snug font-mono text-caption text-alarm-400">
             {error}
           </p>
         ) : null}

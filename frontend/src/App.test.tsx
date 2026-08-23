@@ -84,8 +84,9 @@ describe('App shell', () => {
   it('loads the mock log and renders it through the live view', async () => {
     render(<App />)
     await userEvent.click(screen.getByRole('button', { name: /mock breach/i }))
-    // "timeline" now also names a view toggle, so assert on the panel's own heading.
-    await waitFor(() => expect(screen.getByText(/timeline · mock/i)).toBeInTheDocument())
+    // The lead panel is the coherence trace and carries the run label; "timeline" now names only
+    // the view toggle.
+    await waitFor(() => expect(screen.getByText(/coherence · mock/i)).toBeInTheDocument())
     expect(screen.getByText(/3 events/)).toBeInTheDocument()
   })
 

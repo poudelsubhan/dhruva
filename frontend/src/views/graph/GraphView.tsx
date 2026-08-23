@@ -129,7 +129,7 @@ export default function GraphView({ events }: GraphViewProps) {
   if (!events.length) {
     return (
       <Panel title="provenance">
-        <p className="p-panel text-small text-ink-muted">No events yet.</p>
+        <p className="p-panel text-caption text-ink-muted">No events yet.</p>
       </Panel>
     )
   }
