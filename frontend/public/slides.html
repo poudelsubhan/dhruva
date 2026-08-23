@@ -171,17 +171,17 @@
 
   <section class="slide">
     <div class="kicker">The mechanism</div>
-    <h2>Reload the save. You still know where the trap is.</h2>
+    <h2>Separate work state from knowledge.</h2>
     <div class="cols">
       <div class="card">
-        <div class="tag">The work</div>
-        <p>Saved every few steps, but only when we've checked it's still on track.</p>
-        <p class="verdict">When it goes wrong &rarr; put back.</p>
+        <div class="tag">Work state</div>
+        <p>Hash-chained checkpoints, minted only on verified windows.</p>
+        <p class="verdict">On breach &rarr; restored.</p>
       </div>
       <div class="card">
-        <div class="tag cy">What it learned</div>
-        <p>Never overwritten. Every note says where it came from.</p>
-        <p class="verdict">When it goes wrong &rarr; <span class="cy">kept</span>.</p>
+        <div class="tag cy">Knowledge</div>
+        <p>Append-only and taint-tracked. Every belief records where it came from.</p>
+        <p class="verdict">On breach &rarr; <span class="cy">kept</span>.</p>
       </div>
     </div>
   </section>
