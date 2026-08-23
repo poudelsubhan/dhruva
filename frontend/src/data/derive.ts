@@ -14,6 +14,41 @@ export interface CoherencePoint {
   coherence: number
   verdict: 'pass' | 'warn' | 'breach'
   step?: number
+  /** The three named scores behind the blend. C hides which one moved; these do not. */
+  alignment: number
+  repetition: number
+  progress: number
+  /** The judge's own sentence. On the breach window this is the most load-bearing string here. */
+  rationale: string
+  window: [number, number]
+  violatedConstraints: string[]
+  testsTampered: boolean
+}
+
+/**
+ * One knowledge-ledger row with its audit outcome folded in.
+ *
+ * The live path fetches this from /ledger, but a canned replay has no backend registry to ask, so
+ * the same rows have to be reconstructable from the log alone. Otherwise the demo path shows every
+ * entry as clean and the eviction — the thing the run is about — never appears.
+ */
+export interface LedgerRow {
+  id: string
+  kind: string
+  text: string
+  seq: number
+  sourceSeqs: number[]
+  status: 'clean' | 'evicted'
+  reason?: string
+  taint?: number
+}
+
+export interface RollbackSpan {
+  seq: number
+  fromSeq: number
+  toSeq: number
+  targetId: string
+  discarded: [number, number]
 }
 
 export interface DerivedRun {
@@ -22,8 +57,10 @@ export interface DerivedRun {
   checkpoints: { id: string; seq: number; confirmed: boolean }[]
   arcs: TimelineArc[]
   progress: ProgressResult | null
-  learnings: { entryId: string; kind: string; text: string; seq: number }[]
+  learnings: { entryId: string; kind: string; text: string; seq: number; sourceSeqs: number[] }[]
   audits: (LedgerAuditPayload & { seq: number })[]
+  ledgerRows: LedgerRow[]
+  rollbacks: RollbackSpan[]
   injections: { scenario: string; seq: number }[]
   poisonedSeqs: number[]
   breaches: number[]
@@ -41,6 +78,7 @@ export function derive(events: readonly DhruvaEvent[]): DerivedRun {
   const learnings: DerivedRun['learnings'] = []
   const audits: DerivedRun['audits'] = []
   const injections: DerivedRun['injections'] = []
+  const rollbacks: RollbackSpan[] = []
   const poisonedSeqs: number[] = []
   const breaches: number[] = []
   let progress: ProgressResult | null = null
@@ -53,6 +91,13 @@ export function derive(events: readonly DhruvaEvent[]): DerivedRun {
         seq: event.seq,
         coherence: event.payload.coherence,
         verdict: event.payload.verdict,
+        alignment: event.payload.alignment,
+        repetition: event.payload.repetition,
+        progress: event.payload.progress,
+        rationale: event.payload.rationale,
+        window: event.payload.window,
+        violatedConstraints: event.payload.violated_constraints ?? [],
+        testsTampered: Boolean(event.payload.tests_tampered),
       })
       if (event.payload.tests_tampered) testsTampered = true
     } else if (isEvent('checkpoint')(event)) {
@@ -63,18 +108,35 @@ export function derive(events: readonly DhruvaEvent[]): DerivedRun {
       })
     } else if (isEvent('rollback')(event)) {
       const target = checkpoints.find((c) => c.id === event.payload.target_checkpoint_id)
+      const toSeq = target?.seq ?? event.payload.discarded_range[0]
       arcs.push({
         id: `rb-${event.seq}`,
         fromSeq: event.payload.from_seq,
-        toSeq: target?.seq ?? event.payload.discarded_range[0],
+        toSeq,
         label: `rollback to ${event.payload.target_checkpoint_id}`,
       })
+      rollbacks.push({
+        seq: event.seq,
+        fromSeq: event.payload.from_seq,
+        toSeq,
+        targetId: event.payload.target_checkpoint_id,
+        discarded: event.payload.discarded_range,
+      })
+      // D11.4 — a rollback truncates the chain AT its target. A checkpoint minted inside the
+      // discarded range no longer exists on the backend, and a UI that keeps drawing it is
+      // showing a rollback target that cannot be rolled back to.
+      if (target) {
+        for (let i = checkpoints.length - 1; i >= 0; i -= 1) {
+          if (checkpoints[i].seq > target.seq) checkpoints.splice(i, 1)
+        }
+      }
     } else if (isEvent('learning')(event)) {
       learnings.push({
         entryId: event.payload.entry_id,
         kind: event.payload.kind,
         text: event.payload.text,
         seq: event.seq,
+        sourceSeqs: event.payload.source_seqs,
       })
     } else if (isEvent('ledger_audit')(event)) {
       audits.push({ ...event.payload, seq: event.seq })
@@ -102,6 +164,27 @@ export function derive(events: readonly DhruvaEvent[]): DerivedRun {
     if (target) target.confirmed = true
   }
 
+  // Fold every audit verdict back onto the entries it judged. Latest audit wins: a later rollback
+  // can evict something an earlier one kept.
+  const ledgerRows: LedgerRow[] = learnings.map((l) => ({
+    id: l.entryId,
+    kind: l.kind,
+    text: l.text,
+    seq: l.seq,
+    sourceSeqs: l.sourceSeqs,
+    status: 'clean' as const,
+  }))
+  const byId = new Map(ledgerRows.map((row) => [row.id, row]))
+  for (const audit of audits) {
+    for (const entry of audit.evicted) {
+      const row = byId.get(entry.entry_id)
+      if (!row) continue
+      row.status = 'evicted'
+      row.reason = entry.reason
+      row.taint = entry.taint_score
+    }
+  }
+
   const passing = progress
     ? Object.values(progress.per_test).filter((v) => v === 'pass').length
     : 0
@@ -114,6 +197,8 @@ export function derive(events: readonly DhruvaEvent[]): DerivedRun {
     progress,
     learnings,
     audits,
+    ledgerRows,
+    rollbacks,
     injections,
     poisonedSeqs,
     breaches,
@@ -125,7 +210,10 @@ export function derive(events: readonly DhruvaEvent[]): DerivedRun {
 }
 
 /** Half-life: linear interpolation of the first crossing of C = 0.5. */
-export function coherenceHalfLife(points: readonly CoherencePoint[], level = 0.5): number | null {
+export function coherenceHalfLife(
+  points: readonly Pick<CoherencePoint, 'seq' | 'coherence' | 'verdict'>[],
+  level = 0.5,
+): number | null {
   for (let i = 1; i < points.length; i += 1) {
     const a = points[i - 1]
     const b = points[i]

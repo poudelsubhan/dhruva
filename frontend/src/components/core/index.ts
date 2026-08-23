@@ -6,6 +6,7 @@
  */
 
 export { CheckpointDiamond, type CheckpointDiamondProps } from './CheckpointDiamond'
+export { CoherenceChart, type ChartPoint, type CoherenceChartProps } from './CoherenceChart'
 export {
   CoherenceGauge,
   DEFAULT_THRESHOLDS,

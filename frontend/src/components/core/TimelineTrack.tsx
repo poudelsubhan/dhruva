@@ -10,6 +10,11 @@ import { EVENT_LABELS, EventGlyph, type EventType } from './EventGlyph'
  * one EventGlyph per event, plus rollback arcs, hover-to-inspect, and a pinned
  * playhead.
  *
+ * LANES. Seventeen glyph shapes on one row is a legible language at rest and a
+ * smudge at demo density. Pass `laneLabels` + `laneOf` and the track splits into
+ * stacked rows, so what the supervisor did stops competing for pixels with what
+ * the agent did. With neither prop the track is a single row, unchanged.
+ *
  * VIRTUALIZATION. The track never squeezes glyphs together to fit: seq maps to
  * x at a floor of MIN_PX_PER_SEQ, and the container scrolls when the run is
  * longer than the viewport. Only the glyphs whose x falls inside the scrolled
@@ -43,9 +48,15 @@ export type TimelineTrackProps<E extends TimelineEvent = TimelineEvent> = {
   /** Explicit [minSeq, maxSeq]. Defaults to the extent of `events`. */
   domain?: [number, number]
   onSelect?: (event: E) => void
+  /** Draws a ring on this seq, so selection is visible on the spine as well as in the inspector. */
+  selectedSeq?: number | null
   arcs?: readonly TimelineArc[]
   /** Pins a vertical playhead at this seq. */
   playhead?: number | null
+  /** Row labels, top to bottom. Supplying these turns the track into a laned view. */
+  laneLabels?: readonly string[]
+  /** Row index for an event. Out-of-range values clamp into the last lane. */
+  laneOf?: (event: E) => number
   /** Total track height in px. Defaults to 132. */
   height?: number
 }
@@ -54,6 +65,7 @@ const MIN_PX_PER_SEQ = 18
 const EDGE_PAD = 28
 const HIT = 30
 const OVERSCAN_PX = 240
+const LANE_GUTTER = 64
 
 function useMeasuredWidth<T extends HTMLElement>(ref: React.RefObject<T | null>): number {
   const [width, setWidth] = useState(0)
@@ -90,8 +102,11 @@ export function TimelineTrack<E extends TimelineEvent>({
   events,
   domain,
   onSelect,
+  selectedSeq = null,
   arcs,
   playhead = null,
+  laneLabels,
+  laneOf,
   height = 132,
 }: TimelineTrackProps<E>) {
   const scrollerRef = useRef<HTMLDivElement>(null)
@@ -133,15 +148,49 @@ export function TimelineTrack<E extends TimelineEvent>({
     return sorted.slice(lowerBound(sorted, fromSeq), lowerBound(sorted, toSeq + 1))
   }, [sorted, width, scrollLeft, d0, pxPerSeq])
 
-  const baselineY = Math.round(height * 0.62)
-  const arcApexY = Math.round(height * 0.14)
+  const laneCount = laneLabels?.length ?? 1
+  const laned = laneCount > 1
+
+  // Single lane keeps the geometry it always had. Laned mode reserves a strip at the top for
+  // rollback arcs and a strip at the bottom for the seq ruler, then divides what is left.
+  const arcApexY = laned ? 10 : Math.round(height * 0.14)
+  const lanesTop = laned ? 34 : 0
+  const rulerBand = laned ? 18 : 0
+  const laneHeight = laned ? (height - lanesTop - rulerBand) / laneCount : 0
+  const baselineOf = useCallback(
+    (lane: number) =>
+      laned
+        ? Math.round(lanesTop + laneHeight * lane + laneHeight / 2)
+        : Math.round(height * 0.62),
+    [laned, lanesTop, laneHeight, height],
+  )
+  const baselineY = baselineOf(0)
+  const rulerY = laned ? height - rulerBand + 2 : baselineY + 22
+  const laneIndex = useCallback(
+    (event: E) => (laneOf ? Math.min(laneCount - 1, Math.max(0, laneOf(event))) : 0),
+    [laneOf, laneCount],
+  )
 
   return (
-    <div className="relative">
+    <div className="relative flex">
+      {laned ? (
+        <div className="relative shrink-0 border-r border-edge-subtle" style={{ width: LANE_GUTTER, height }}>
+          {laneLabels?.map((lane, i) => (
+            <span
+              key={lane}
+              className="absolute right-tight font-mono text-micro tracking-[0.14em] text-ink-muted uppercase"
+              style={{ top: baselineOf(i) - 7 }}
+            >
+              {lane}
+            </span>
+          ))}
+        </div>
+      ) : null}
+
       <div
         ref={scrollerRef}
         onScroll={onScroll}
-        className="relative overflow-x-auto overflow-y-hidden"
+        className="relative min-w-0 flex-1 overflow-x-auto overflow-y-hidden"
         style={{ height }}
         data-testid="timeline-scroller"
       >
@@ -153,15 +202,18 @@ export function TimelineTrack<E extends TimelineEvent>({
             aria-hidden="true"
             style={{ zIndex: 'var(--z-track)' }}
           >
-            {/* Baseline: 2px, not a hairline — it anchors every mark on the track. */}
-            <line
-              x1={EDGE_PAD * 0.5}
-              y1={baselineY}
-              x2={contentWidth - EDGE_PAD * 0.5}
-              y2={baselineY}
-              stroke={color.edge.strong}
-              strokeWidth={2}
-            />
+            {/* Baselines: 2px, not hairlines — they anchor every mark on the track. */}
+            {Array.from({ length: laneCount }, (_, i) => (
+              <line
+                key={`baseline-${i}`}
+                x1={EDGE_PAD * 0.5}
+                y1={baselineOf(i)}
+                x2={contentWidth - EDGE_PAD * 0.5}
+                y2={baselineOf(i)}
+                stroke={i === 0 ? color.edge.strong : color.edge.default}
+                strokeWidth={2}
+              />
+            ))}
 
             {/* Rollback arcs: quadratic curve from breach seq back to the target. */}
             {(arcs ?? []).map((arc) => {
@@ -209,6 +261,7 @@ export function TimelineTrack<E extends TimelineEvent>({
           {visible.map((event) => {
             const isNew = event.seq > pulseAbove
             const selectable = Boolean(onSelect)
+            const lane = laneIndex(event)
             return (
               <button
                 key={event.seq}
@@ -226,11 +279,12 @@ export function TimelineTrack<E extends TimelineEvent>({
                 className={clsx(
                   'absolute flex items-center justify-center rounded-mark',
                   selectable && 'cursor-pointer hover:bg-base-600',
+                  selectedSeq === event.seq && 'bg-base-600 ring-2 ring-ink-primary',
                   isNew && 'stream-pulse',
                 )}
                 style={{
                   left: x(event.seq) - HIT / 2,
-                  top: baselineY - HIT / 2,
+                  top: baselineOf(lane) - HIT / 2,
                   width: HIT,
                   height: HIT,
                 }}
@@ -247,7 +301,7 @@ export function TimelineTrack<E extends TimelineEvent>({
                 key={`tick-${event.seq}`}
                 aria-hidden="true"
                 className="absolute font-mono text-micro text-ink-muted tabular-nums"
-                style={{ left: x(event.seq) - 12, top: baselineY + 22, width: 24, textAlign: 'center' }}
+                style={{ left: x(event.seq) - 12, top: rulerY, width: 24, textAlign: 'center' }}
               >
                 {event.seq}
               </span>

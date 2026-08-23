@@ -4,161 +4,261 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Dhruva</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet" />
 <style>
+  /* Colour discipline, the same rule the app follows and the same reason:
+     cyan  = knowledge, the thing that survives a rollback. Nowhere else.
+     alarm = drift, breach, loss. Nowhere else.
+     Chrome is achromatic, so the two signals are the only colour on any slide. */
   :root {
-    --base-950:#07080b; --base-900:#0b0d12; --base-800:#12151c; --base-700:#1a1e27;
+    --base-950:#07080b; --base-800:#12151c;
     --edge-subtle:#1e2330; --edge-default:#2d3445;
     --ink:#f2f5fa; --ink-2:#b3b6bb; --ink-muted:#7f8a9c;
-    --cy:#35dcf2; --cy-dim:#1a8896;
-    --alarm:#f54123; --pass:#4ad991;
-    --mono: ui-monospace, "SF Mono", Menlo, monospace;
-    --sans: -apple-system, "Helvetica Neue", Inter, sans-serif;
+    --cy:#35dcf2;
+    --alarm:#f54123;
+    --pass:#4ad991;
+    --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    --sans: "Geist", -apple-system, "Helvetica Neue", Inter, sans-serif;
   }
   * { margin:0; padding:0; box-sizing:border-box; }
-  html, body { height:100%; background:var(--base-950); color:var(--ink); font-family:var(--sans); overflow:hidden; }
+  html, body { height:100%; background:var(--base-950); color:var(--ink);
+               font-family:var(--sans); overflow:hidden;
+               -webkit-font-smoothing:antialiased; }
 
   .deck { height:100vh; width:100vw; position:relative; }
+  /* Every slide is a centred column. Text wraps inside a measure rather than at a hand-placed
+     break, so nothing has to be re-broken when the type scale or the projector changes. */
   .slide {
     position:absolute; inset:0; display:none;
-    padding: 7vh 8vw; flex-direction:column; justify-content:center;
-    background:var(--base-950);
+    padding: 7vh 8vw 12vh;
+    flex-direction:column; justify-content:center; align-items:center; text-align:center;
   }
-  .slide.on { display:flex; animation: in .45s cubic-bezier(.2,.7,.3,1); }
-  @keyframes in { from { opacity:0; transform: translateY(10px); } to { opacity:1; transform:none; } }
+  .slide.on { display:flex; animation: in .32s ease-out; }
+  @keyframes in { from { opacity:0 } to { opacity:1 } }
+  @media (prefers-reduced-motion: reduce) { .slide.on { animation:none } }
 
-  .kicker {
-    font-family:var(--mono); font-size:.78rem; letter-spacing:.24em; text-transform:uppercase;
-    color:var(--ink-muted); margin-bottom:3.5vh;
-  }
-  h1 { font-size:min(9vw,7.5rem); font-weight:700; letter-spacing:-.035em; line-height:.95; }
-  h2 { font-size:min(5.6vw,4.2rem); font-weight:650; letter-spacing:-.025em; line-height:1.06; }
-  h3 { font-size:min(3.4vw,2.4rem); font-weight:600; letter-spacing:-.015em; line-height:1.2; }
-  .lede { font-size:min(2.1vw,1.5rem); color:var(--ink-2); line-height:1.55; max-width:52ch; margin-top:3vh; }
-  .cy { color:var(--cy); } .red { color:var(--alarm); } .pass { color:var(--pass); }
-  .rule { width:5.5rem; height:3px; background:var(--cy); margin-bottom:4vh; }
-  .rule.red { background:var(--alarm); }
+  .kicker { font-family:var(--mono); font-weight:500; font-size:min(1.32vw,1.032rem);
+            letter-spacing:.05em; color:var(--ink-muted); margin-bottom:3.5vh; }
+  h1 { font-size:min(18vw,16rem); font-weight:700; letter-spacing:-.05em; line-height:.9; }
+  h2 { font-size:min(6.48vw,4.92rem); font-weight:600; letter-spacing:-.03em; line-height:1.1;
+       max-width:22ch; margin-inline:auto; }
+  .lede { font-size:min(2.34vw,1.68rem); color:var(--ink-2); line-height:1.55;
+          max-width:62ch; margin:3.2vh auto 0; }
+  .tagline { font-size:min(2.93vw,2.1rem); }
+  .meta { font-family:var(--mono); font-weight:500; font-size:min(1.2vw,.984rem);
+          letter-spacing:.03em; color:var(--ink-muted); margin-top:5vh; }
+  .red { color:var(--alarm); } .cy { color:var(--cy); }
+  /* The one line on slide 5 that is meant to be repeated back. It gets its own air. */
+  .alpha { font-size:min(2.88vw,2.04rem); font-weight:600; letter-spacing:-.02em;
+           color:var(--ink); margin-top:3.5vh; }
+  .close { font-size:min(2.52vw,1.8rem); font-weight:600; letter-spacing:-.02em;
+           color:var(--ink); margin-top:4vh; max-width:60ch; margin-inline:auto; }
 
-  .cols { display:grid; grid-template-columns:1fr 1fr; gap:2.2rem; margin-top:5vh; }
-  .card {
-    border:1px solid var(--edge-default); border-radius:14px; background:var(--base-800);
-    padding:2.4rem 2.2rem; min-height:26vh; display:flex; flex-direction:column; gap:1.1rem;
-  }
-  .card .tag { font-family:var(--mono); font-size:.75rem; letter-spacing:.2em; text-transform:uppercase; color:var(--ink-muted); }
-  .card .tag.cy { color:var(--cy); }
-  .card p { font-size:min(1.9vw,1.35rem); color:var(--ink-2); line-height:1.5; }
-  .big { font-size:min(8vw,6rem); font-weight:700; letter-spacing:-.04em; line-height:1; }
+  /* The turn: the second beat on a slide that carries two. A hairline, not a new slide. */
+  .turn { margin:5vh auto 0; padding-top:3.5vh; border-top:1px solid var(--edge-subtle);
+          font-size:min(2.34vw,1.68rem); max-width:62ch; }
+  .turn p { color:var(--ink-2); line-height:1.55; }
+  .turn strong { color:var(--ink); font-weight:600; }
 
-  table { width:100%; border-collapse:collapse; margin-top:5vh; font-family:var(--mono); }
-  th, td { text-align:left; padding:1.05rem 0.6rem; font-size:min(1.9vw,1.3rem); }
-  th { font-size:.75rem; letter-spacing:.18em; text-transform:uppercase; color:var(--ink-muted); font-weight:500; border-bottom:1px solid var(--edge-default); }
+  .cols { display:grid; grid-template-columns:1fr 1fr; gap:1.8rem;
+          margin:5vh auto 0; max-width:1100px; width:100%; }
+  .card { border:1px solid var(--edge-default); border-radius:3px; background:var(--base-800);
+          padding:2.2rem 2rem; min-height:24vh;
+          display:flex; flex-direction:column; align-items:center; gap:1rem; }
+  .tag { font-family:var(--mono); font-weight:500; font-size:min(1.2vw,.984rem);
+         letter-spacing:.05em; color:var(--ink-muted); }
+  .card p { font-size:min(2.1vw,1.5rem); color:var(--ink-2); line-height:1.5; max-width:34ch; }
+  .verdict { color:var(--ink); font-weight:600; margin-top:auto; }
+  /* Twelve tests in three independent groups, the same board the app shows. A filled row
+     beside an empty one is the one thing on this deck nobody has to read to understand. */
+  .lamps { display:flex; gap:.9rem; justify-content:center; }
+  .lamps span { display:flex; gap:.35rem; }
+  .lamps i { width:.8rem; height:.8rem; border-radius:50%; border:1.5px solid var(--edge-strong); }
+  .lamps i.on { background:var(--pass); border-color:var(--pass); }
+  .lamps i.off { border-color:var(--alarm); }
+
+  /* A flight recorder prints its numbers in mono. */
+  .big { font-family:var(--mono); font-size:min(8.4vw,6.24rem); font-weight:600;
+         letter-spacing:-.045em; line-height:1; font-variant-numeric:tabular-nums; }
+
+  /* The one thing that is not centred: columns of numbers need a shared left edge to compare. */
+  table { border-collapse:collapse; margin:5vh auto 0; font-family:var(--mono);
+          font-variant-numeric:tabular-nums; max-width:1100px; width:100%; }
+  th, td { text-align:left; padding:1.05rem .7rem; font-size:min(2.1vw,1.44rem); }
+  th { font-weight:500; font-size:min(1.2vw,.984rem); letter-spacing:.05em; color:var(--ink-muted);
+       border-bottom:1px solid var(--edge-default); }
   td { color:var(--ink-2); border-bottom:1px solid var(--edge-subtle); }
   tr.win td { color:var(--pass); }
-  td.n, th.n { text-align:center; }
+  td.n, th.n { text-align:right; }
 
-  .foot { position:absolute; left:8vw; bottom:5vh; font-family:var(--mono); font-size:.8rem; color:var(--ink-muted); }
-  .prog { position:absolute; left:0; bottom:0; height:2px; background:var(--cy); transition:width .35s ease; }
-  .num { position:absolute; right:8vw; bottom:5vh; font-family:var(--mono); font-size:.8rem; color:var(--ink-muted); }
-  .hint { position:absolute; right:8vw; top:5vh; font-family:var(--mono); font-size:.72rem; color:var(--edge-default); }
+  /* Signature: the deck as a run. One segment per slide, past dim and present bone, with the
+     two segments that carry the story tinted -- where it breaks, where it recovers. */
+  .strip { position:absolute; left:8vw; right:8vw; bottom:5.5vh; display:flex; gap:6px; }
+  .seg { flex:1; height:2px; background:var(--edge-subtle); transition:background .3s ease; }
+  .seg.past { background:var(--edge-default); }
+  .seg.now { background:var(--ink); }
+  .seg.breach.now { background:var(--alarm); }
+  .seg.recover.now { background:var(--pass); }
+  .num { position:absolute; right:8vw; bottom:2vh; font-family:var(--mono); font-size:.912rem;
+         letter-spacing:.03em; color:var(--ink-muted); font-variant-numeric:tabular-nums; }
+  .hint { position:absolute; left:8vw; bottom:2vh; font-family:var(--mono); font-size:.864rem;
+          letter-spacing:.03em; color:var(--edge-default); }
 
-  .demo-cue { display:flex; align-items:center; gap:1.2rem; margin-top:4vh; }
-  .dot { width:.7rem; height:.7rem; border-radius:50%; background:var(--cy); box-shadow:0 0 0 0 var(--cy); animation:pulse 2s infinite; }
-  @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(53,220,242,.5)} 70%{box-shadow:0 0 0 14px rgba(53,220,242,0)} 100%{box-shadow:0 0 0 0 rgba(53,220,242,0)} }
+  /* ---- Responsive tiers. These MUST stay last in the sheet: they share their
+     specificity with the base rules above, so source order is the only thing that
+     lets them win. Sitting above the base rules they parse fine and do nothing. ---- */
+
+  /* The 20% bump is for a big room. On a short viewport (a 720p projector, or a laptop with
+     browser chrome eating the height) the densest slide would run past the bottom, and the deck
+     clips rather than scrolls, so it would go unnoticed. Back the bump out below 1050px tall. */
+  @media (max-height: 1050px) {
+    .slide { padding:6vh 8vw 10vh; }
+    h2 { font-size:min(5.4vw,4.1rem); }
+    .lede, .turn { font-size:min(1.95vw,1.4rem); }
+    .tagline { font-size:min(2.44vw,1.75rem); }
+    .big { font-size:min(7vw,5.2rem); }
+    .alpha { font-size:min(2.4vw,1.7rem); margin-top:2.5vh; }
+    .card { min-height:20vh; padding:1.8rem 1.6rem; }
+    .cols { margin-top:3.5vh; }
+    .kicker { margin-bottom:2.5vh; }
+    .lede { margin-top:2.4vh; }
+  }
+
+  /* 850px and shorter. Type comes down again and the vertical rhythm tightens, because a clipped
+     final line on the results slide is the one failure nobody in the room would tell you about. */
+  @media (max-height: 850px) {
+    .slide { padding:5vh 8vw 9vh; }
+    h2 { font-size:min(5vw,3.2rem); }
+    .lede, .turn { font-size:min(1.8vw,1.15rem); }
+    .tagline { font-size:min(2.25vw,1.44rem); }
+    .big { font-size:min(6vw,4rem); }
+    .alpha { font-size:min(2.2vw,1.4rem); }
+    .card { min-height:0; padding:1.4rem 1.3rem; gap:.7rem; }
+    .cols { margin-top:3vh; }
+    .kicker { margin-bottom:2.5vh; }
+  }
 </style>
 </head>
 <body>
 <div class="deck" id="deck">
 
   <section class="slide">
-    <div class="rule"></div>
     <h1>Dhruva</h1>
-    <h3 class="cy" style="margin-top:2.5vh">Rollback without amnesia.</h3>
-    <p class="lede">Catches an agent losing the plot. Rolls it back.<br />Keeps what it learned.</p>
+    <p class="lede tagline">Proactive intelligence for long running agents</p>
+    <p class="meta">AGI House | Long Horizon Agents Build Day | 22 August 2026</p>
+  </section>
+
+  <section class="slide" data-beat="breach">
+    <div class="kicker">The problem</div>
+    <h2>Agents don't crash.<br />They drift.</h2>
+    <p class="lede">A tool hands back something false. A summary drops the one rule that
+      mattered. Nothing breaks, so nothing warns you, and the agent keeps working, confidently,
+      on the wrong thing.</p>
+    <div class="turn">
+      <p>The obvious fix is a rollback. But revert a commit and you still remember why you
+        wrote it. Roll an agent back and it <strong>forgets</strong>. It learns the same things
+        twice, and walks into the same dead ends.</p>
+    </div>
   </section>
 
   <section class="slide">
-    <div class="kicker">the problem</div>
-    <h2>Agents don't crash.<br /><span class="red">They drift.</span></h2>
-    <p class="lede">A tool lies. A constraint gets compacted away.<br />The agent keeps working, confidently, on the wrong thing.</p>
-  </section>
-
-  <section class="slide">
-    <div class="kicker">and the obvious fix is lossy</div>
-    <h2>Rollback causes<br /><span class="red">amnesia.</span></h2>
-    <p class="lede">Revert the tree and you destroy everything the agent<br />legitimately learned along the way.</p>
-  </section>
-
-  <section class="slide">
-    <div class="kicker">the mechanism</div>
-    <h2>Separate the two.</h2>
+    <div class="kicker">The mechanism</div>
+    <h2>Separate work state from knowledge.</h2>
     <div class="cols">
       <div class="card">
-        <div class="tag">work state</div>
+        <div class="tag">Work state</div>
         <p>Hash-chained checkpoints, minted only on verified windows.</p>
-        <p style="color:var(--ink);margin-top:auto"><strong>On breach → restored.</strong></p>
+        <p class="verdict">On breach &rarr; restored.</p>
       </div>
       <div class="card">
-        <div class="tag cy">knowledge</div>
-        <p>Append-only, taint-tracked, separate from the tree.</p>
-        <p style="color:var(--ink);margin-top:auto"><strong>On breach → <span class="cy">kept</span>.</strong></p>
+        <div class="tag cy">Knowledge</div>
+        <p>Append-only and taint-tracked. Every belief records where it came from.</p>
+        <p class="verdict">On breach &rarr; <span class="cy">kept</span>.</p>
       </div>
     </div>
   </section>
 
   <section class="slide">
-    <div class="rule"></div>
     <h1>Demo</h1>
   </section>
 
-  <section class="slide">
-    <div class="kicker">same task · same corruption · same schedule</div>
-    <h2>The only variable is<br />whether it may act.</h2>
+  <section class="slide" data-beat="recover">
+    <div class="kicker">Same job. Same sabotage. Same moment.</div>
+    <h2>Seeing the drift was never the problem.</h2>
     <div class="cols">
       <div class="card">
-        <div class="tag cy">supervised</div>
-        <div class="big pass">12/12</div>
-        <p>1 breach · 1 rollback · recovered</p>
+        <div class="tag">Allowed to undo</div>
+        <div class="lamps">
+          <span><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span>
+          <span><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span>
+          <span><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span>
+        </div>
+        <div class="big" style="color:var(--pass)">12/12</div>
+        <p>It caught the sabotage, put the work back, and finished the job.</p>
       </div>
       <div class="card">
-        <div class="tag" style="color:var(--alarm)">unsupervised</div>
+        <div class="tag">Not allowed</div>
+        <div class="lamps">
+          <span><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i></span>
+          <span><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i></span>
+          <span><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i></span>
+        </div>
         <div class="big red">0/12</div>
-        <p>2 breaches detected · 0 rollbacks</p>
+        <p>It caught the same sabotage. It just had to keep going.</p>
       </div>
     </div>
-    <p class="lede" style="margin-top:3.5vh">The control arm isn't blind. It scores the drift identically.<br />It just never intervenes.</p>
+    <p class="lede">Both runs spotted the problem. Only one could put the work back, and it kept
+      what it had learned on the way.</p>
+    <p class="alpha">The alpha is in the delta.</p>
   </section>
 
   <section class="slide">
-    <div class="kicker">measurements</div>
-    <h2>Eviction has to be precise.</h2>
+    <div class="kicker">Measurements</div>
+    <h2>Eviction has to be precise, or it's just amnesia.</h2>
     <table>
-      <tr><th>policy</th><th class="n">kept</th><th class="n">clean lost</th><th class="n">poison kept</th></tr>
-      <tr><td>keep everything</td><td class="n">3</td><td class="n">0</td><td class="n red">1</td></tr>
-      <tr><td>evict the range</td><td class="n">1</td><td class="n red">1</td><td class="n">0</td></tr>
-      <tr class="win"><td>by provenance</td><td class="n">2</td><td class="n">0</td><td class="n">0</td></tr>
+      <tr><th>Policy</th><th class="n">Kept</th><th class="n">Knowledge lost</th><th class="n">False belief kept</th></tr>
+      <tr><td>Keep everything</td><td class="n">3</td><td class="n">0</td><td class="n red">1</td></tr>
+      <tr><td>Evict the range</td><td class="n">1</td><td class="n red">1</td><td class="n">0</td></tr>
+      <tr class="win"><td>By provenance</td><td class="n">2</td><td class="n">0</td><td class="n">0</td></tr>
     </table>
   </section>
 
   <section class="slide">
-    <div class="rule"></div>
     <h2>One event log.<br />Three adapter seams.</h2>
-    <p class="lede">Live view, provenance graph, twin, replay.<br />Every one derives from that single log.</p>
-    <p class="lede cy" style="font-family:var(--mono);font-size:1rem">github.com/poudelsubhan/dhruva</p>
+    <p class="lede">Every view reads that one log: live, provenance graph, twin, replay.
+      Point the seams at your agent and your task, and nothing above them changes.</p>
+    <p class="close">Observability explains the failure. Proactive intelligence undoes it.</p>
+    <p class="meta cy">github.com/poudelsubhan/dhruva</p>
   </section>
 
 </div>
 
-<div class="hint">← → · F fullscreen</div>
+<div class="hint">&larr; &rarr; &middot; F fullscreen</div>
 <div class="num" id="num"></div>
-<div class="prog" id="prog"></div>
+<nav class="strip" id="strip" aria-hidden="true"></nav>
 
 <script>
   const slides = [...document.querySelectorAll('.slide')];
+  const strip = document.getElementById('strip');
+  // One segment per slide, tinted by the beat that slide carries.
+  const segs = slides.map((s) => {
+    const el = document.createElement('span');
+    el.className = 'seg' + (s.dataset.beat ? ' ' + s.dataset.beat : '');
+    strip.appendChild(el);
+    return el;
+  });
+
   let i = 0;
   function show(n) {
     i = Math.max(0, Math.min(n, slides.length - 1));
     slides.forEach((s, k) => s.classList.toggle('on', k === i));
+    segs.forEach((el, k) => {
+      el.classList.toggle('past', k < i);
+      el.classList.toggle('now', k === i);
+    });
     document.getElementById('num').textContent = `${i + 1} / ${slides.length}`;
-    document.getElementById('prog').style.width = `${((i + 1) / slides.length) * 100}%`;
   }
   addEventListener('keydown', (e) => {
     if (['ArrowRight', ' ', 'PageDown', 'Enter'].includes(e.key)) { e.preventDefault(); show(i + 1); }
@@ -168,7 +268,7 @@
     else if (e.key.toLowerCase() === 'f') document.documentElement.requestFullscreen?.();
   });
   document.body.addEventListener('click', () => show(i + 1));
-  // ?s=5 jumps straight to a slide. The run of show tells you to skip to the results if you are
+  // ?s=5 jumps straight to the twin result. The run of show tells you to skip there if you are
   // running long, and hunting for it with arrow keys on stage is not a plan.
   const start = Number(new URLSearchParams(location.search).get('s') || 1) - 1;
   show(Number.isFinite(start) ? start : 0);

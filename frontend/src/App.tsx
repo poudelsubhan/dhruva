@@ -173,6 +173,8 @@ export default function App() {
 
   const allEvents = source?.kind === 'live' ? stream.events : staticEvents
   const isCanned = source?.kind === 'canned'
+  // What the header pill reports is what you are LOOKING AT, not whether a key is configured.
+  const isStatic = source?.kind === 'canned' || source?.kind === 'mock' || source?.kind === 'replay'
   const playback = usePlayback(isCanned ? allEvents : [], 60_000)
   const maxSeq = allEvents.length ? allEvents[allEvents.length - 1].seq : 0
   const shown = useMemo(() => {
@@ -313,7 +315,7 @@ export default function App() {
     <div className="min-h-screen bg-base-900 text-ink-primary">
       <header className="flex flex-wrap items-center justify-between gap-gutter border-b border-edge-subtle px-panel py-snug">
         <div className="flex items-baseline gap-3">
-          <h1 className="text-h3 font-semibold tracking-tight">Dhruva</h1>
+          <h1 className="text-title font-semibold tracking-tight">Dhruva</h1>
           <p className="font-mono text-micro tracking-[0.18em] text-ink-muted uppercase">
             agent supervisor · flight recorder
           </p>
@@ -321,11 +323,11 @@ export default function App() {
         <div className="flex flex-wrap items-center gap-tight">
           {config ? (
             <>
-              <Pill tone={config.live_provider ? 'ok' : 'warn'}>
-                {config.live_provider ? 'live provider' : 'mock provider'}
+              <Pill tone={isStatic ? 'idle' : config.live_provider ? 'ok' : 'warn'}>
+                {isStatic ? 'replaying a recorded run' : config.live_provider ? 'live provider' : 'mock provider'}
               </Pill>
               <span className="font-mono text-micro text-ink-muted">
-                agent {config.models.agent} · judge {config.models.judge}
+                agent scripted · judge {config.models.judge}
               </span>
             </>
           ) : (
@@ -335,106 +337,18 @@ export default function App() {
       </header>
 
       <main className="flex flex-col gap-gutter p-panel">
-        <section className="flex flex-wrap items-end gap-gutter rounded-panel border border-edge-default bg-base-800 p-panel">
-          <div className="flex flex-col gap-tight">
-            <span className="font-mono text-micro tracking-[0.18em] text-ink-muted uppercase">
-              scenario
-            </span>
-            <div className="flex flex-wrap gap-tight">
-              {SCENARIOS.map((s) => (
-                <button
-                  key={s.key}
-                  type="button"
-                  title={s.blurb}
-                  onClick={() => setScenario(s.key)}
-                  className={clsx(
-                    'rounded-mark border px-3 py-2 text-left font-mono text-micro transition-colors',
-                    scenario === s.key
-                      ? 'border-coherence-400 text-ink-primary'
-                      : 'border-edge-default text-ink-muted hover:border-edge-strong',
-                  )}
-                >
-                  {s.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <label className="flex flex-col gap-tight">
-            <span className="font-mono text-micro tracking-[0.18em] text-ink-muted uppercase">
-              at step
-            </span>
-            <input
-              type="number"
-              min={1}
-              value={atStep}
-              onChange={(e) => setAtStep(Number(e.target.value))}
-              className="w-20 rounded-mark border border-edge-default bg-base-900 px-2 py-2 font-mono text-small"
-            />
-          </label>
-
-          <div className="flex flex-wrap gap-tight">
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => launch(true)}
-              className="rounded-mark border border-coherence-400 px-4 py-2 font-mono text-micro tracking-[0.14em] text-coherence-400 uppercase transition-colors hover:bg-coherence-400/10 disabled:opacity-40"
-            >
-              run with scenario
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => launch(false)}
-              className="rounded-mark border border-edge-default px-4 py-2 font-mono text-micro tracking-[0.14em] text-ink-secondary uppercase transition-colors hover:border-edge-strong disabled:opacity-40"
-            >
-              clean run
-            </button>
-            <button
-              type="button"
-              disabled={!liveRunId}
-              onClick={fireNow}
-              className="rounded-mark border border-alarm-400 px-4 py-2 font-mono text-micro tracking-[0.14em] text-alarm-400 uppercase transition-colors hover:bg-alarm-400/10 disabled:opacity-30"
-            >
-              inject now
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={launchTwin}
-              className="rounded-mark border border-edge-default px-4 py-2 font-mono text-micro tracking-[0.14em] text-ink-secondary uppercase transition-colors hover:border-edge-strong disabled:opacity-40"
-            >
-              twin run
-            </button>
-            <button
-              type="button"
-              onClick={() => openCanned('s1-supervised')}
-              className="rounded-mark border border-coherence-400 px-4 py-2 font-mono text-micro tracking-[0.14em] text-coherence-400 uppercase hover:bg-coherence-400/10"
-            >
-              demo replay
-            </button>
-            <button
-              type="button"
-              onClick={() => openMock('breach')}
-              className="rounded-mark border border-edge-default px-4 py-2 font-mono text-micro tracking-[0.14em] text-ink-muted uppercase hover:border-edge-strong"
-            >
-              mock breach
-            </button>
-          </div>
-        </section>
-
         {error ? (
-          <p className="rounded-panel border border-alarm-400/50 bg-alarm-400/10 px-panel py-snug font-mono text-small text-alarm-400">
+          <p className="rounded-panel border border-alarm-400/50 bg-alarm-400/10 px-panel py-snug font-mono text-caption text-alarm-400">
             {error}
           </p>
         ) : null}
 
         {isCanned && allEvents.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-gutter rounded-panel border border-coherence-400/40 bg-base-800 px-panel py-snug">
+          <div className="flex flex-wrap items-center gap-gutter rounded-panel border border-edge-default bg-base-800 px-panel py-snug">
             <button
               type="button"
               onClick={playback.toggle}
-              className="rounded-mark border border-coherence-400 px-4 py-2 font-mono text-micro tracking-[0.14em] text-coherence-400 uppercase hover:bg-coherence-400/10"
+              className="rounded-mark border border-edge-default px-4 py-2 font-mono text-micro tracking-[0.14em] text-ink-secondary uppercase transition-colors hover:border-edge-strong"
             >
               {playback.playing ? '❚❚ pause' : '▶ play'}
             </button>
@@ -451,12 +365,12 @@ export default function App() {
               max={Math.max(0, allEvents.length - 1)}
               value={playback.index}
               onChange={(e) => playback.seek(Number(e.target.value))}
-              className="h-1 min-w-40 flex-1 accent-coherence-400"
+              className="h-1 min-w-40 flex-1 accent-ink-secondary"
             />
             <span className="font-mono text-micro text-ink-muted">
               {playback.index + 1}/{allEvents.length}
             </span>
-            <span className="font-mono text-micro tracking-[0.14em] text-coherence-400 uppercase">
+            <span className="font-mono text-micro tracking-[0.14em] text-ink-secondary uppercase">
               {beatLabel(shown)}
             </span>
             <span className="font-mono text-micro text-ink-muted">space · R</span>
@@ -472,7 +386,7 @@ export default function App() {
               max={maxSeq}
               value={scrub ?? maxSeq}
               onChange={(e) => setScrub(Number(e.target.value))}
-              className="h-1 flex-1 accent-coherence-400"
+              className="h-1 flex-1 accent-ink-secondary"
             />
             <span className="w-24 text-right font-mono text-micro text-ink-muted">
               seq {scrub ?? maxSeq}/{maxSeq}
@@ -497,7 +411,7 @@ export default function App() {
                 className={clsx(
                   'rounded-mark border px-3 py-1 font-mono text-micro tracking-[0.14em] uppercase',
                   view === v
-                    ? 'border-coherence-400 text-coherence-400'
+                    ? 'border-ink-primary text-ink-primary'
                     : 'border-edge-default text-ink-muted hover:border-edge-strong',
                 )}
               >
@@ -529,7 +443,95 @@ export default function App() {
           </p>
         )}
 
-        {runs.length > 0 ? (
+        <section className="flex flex-wrap items-end gap-gutter rounded-panel border border-edge-default bg-base-800 p-panel">
+          <div className="flex flex-col gap-tight">
+            <span className="font-mono text-micro tracking-[0.18em] text-ink-muted uppercase">
+              next run · scenario
+            </span>
+            <div className="flex flex-wrap gap-tight">
+              {SCENARIOS.map((s) => (
+                <button
+                  key={s.key}
+                  type="button"
+                  title={s.blurb}
+                  onClick={() => setScenario(s.key)}
+                  className={clsx(
+                    'rounded-mark border px-3 py-2 text-left font-mono text-micro transition-colors',
+                    scenario === s.key
+                      ? 'border-ink-muted bg-base-700 text-ink-primary'
+                      : 'border-edge-default text-ink-muted hover:border-edge-strong',
+                  )}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <label className="flex flex-col gap-tight">
+            <span className="font-mono text-micro tracking-[0.18em] text-ink-muted uppercase">
+              at step
+            </span>
+            <input
+              type="number"
+              min={1}
+              value={atStep}
+              onChange={(e) => setAtStep(Number(e.target.value))}
+              className="w-20 rounded-mark border border-edge-default bg-base-900 px-2 py-2 font-mono text-caption"
+            />
+          </label>
+
+          <div className="flex flex-wrap gap-tight">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => launch(true)}
+              className="rounded-mark border border-ink-primary bg-ink-primary px-4 py-2 font-mono text-micro tracking-[0.14em] text-ink-inverse uppercase transition-colors hover:bg-ink-secondary hover:border-ink-secondary disabled:opacity-40"
+            >
+              run with scenario
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => launch(false)}
+              className="rounded-mark border border-edge-default px-4 py-2 font-mono text-micro tracking-[0.14em] text-ink-secondary uppercase transition-colors hover:border-edge-strong disabled:opacity-40"
+            >
+              clean run
+            </button>
+            <button
+              type="button"
+              disabled={!liveRunId}
+              onClick={fireNow}
+              className="rounded-mark border border-alarm-400 px-4 py-2 font-mono text-micro tracking-[0.14em] text-alarm-400 uppercase transition-colors hover:bg-alarm-400/10 disabled:opacity-30"
+            >
+              inject now
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={launchTwin}
+              className="rounded-mark border border-edge-default px-4 py-2 font-mono text-micro tracking-[0.14em] text-ink-secondary uppercase transition-colors hover:border-edge-strong disabled:opacity-40"
+            >
+              twin run
+            </button>
+            <button
+              type="button"
+              onClick={() => openCanned('s1-supervised')}
+              className="rounded-mark border border-edge-default px-4 py-2 font-mono text-micro tracking-[0.14em] text-ink-secondary uppercase transition-colors hover:border-edge-strong"
+            >
+              demo replay
+            </button>
+            <button
+              type="button"
+              onClick={() => openMock('breach')}
+              className="rounded-mark border border-edge-default px-4 py-2 font-mono text-micro tracking-[0.14em] text-ink-muted uppercase hover:border-edge-strong"
+            >
+              mock breach
+            </button>
+          </div>
+        </section>
+
+        {runs.length > 0 && !isCanned ? (
           <section className="rounded-panel border border-edge-default bg-base-800 p-panel">
             <h2 className="mb-snug font-mono text-micro tracking-[0.18em] text-ink-muted uppercase">
               runs
@@ -544,7 +546,7 @@ export default function App() {
                 >
                   <span className="text-ink-primary">{r.run_id}</span>
                   <span>{r.mode}</span>
-                  {r.twin_id ? <span className="text-coherence-400">twin</span> : null}
+                  {r.twin_id ? <span className="text-ink-secondary">twin</span> : null}
                   {r.scenario ? <span className="text-state-warn">{r.scenario}</span> : null}
                   <span>{r.state}</span>
                   <span>{r.events} events</span>
