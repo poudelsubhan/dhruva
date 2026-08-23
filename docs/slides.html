@@ -32,35 +32,34 @@
      break, so nothing has to be re-broken when the type scale or the projector changes. */
   .slide {
     position:absolute; inset:0; display:none;
-    padding: 9vh 8vw 13vh;
+    padding: 7vh 8vw 12vh;
     flex-direction:column; justify-content:center; align-items:center; text-align:center;
   }
   .slide.on { display:flex; animation: in .32s ease-out; }
   @keyframes in { from { opacity:0 } to { opacity:1 } }
   @media (prefers-reduced-motion: reduce) { .slide.on { animation:none } }
 
-  .kicker { font-family:var(--mono); font-weight:500; font-size:min(1.1vw,.86rem);
+  .kicker { font-family:var(--mono); font-weight:500; font-size:min(1.32vw,1.032rem);
             letter-spacing:.05em; color:var(--ink-muted); margin-bottom:3.5vh; }
-  h1 { font-size:min(9.5vw,8rem); font-weight:700; letter-spacing:-.045em; line-height:.92; }
-  h2 { font-size:min(5.4vw,4.1rem); font-weight:600; letter-spacing:-.03em; line-height:1.1;
+  h1 { font-size:min(18vw,16rem); font-weight:700; letter-spacing:-.05em; line-height:.9; }
+  h2 { font-size:min(6.48vw,4.92rem); font-weight:600; letter-spacing:-.03em; line-height:1.1;
        max-width:22ch; margin-inline:auto; }
-  .thesis { font-size:min(3.2vw,2.3rem); font-weight:600; letter-spacing:-.025em;
-            line-height:1.2; color:var(--cy); margin-top:2.5vh; }
-  .lede { font-size:min(1.95vw,1.4rem); color:var(--ink-2); line-height:1.55;
+  .lede { font-size:min(2.34vw,1.68rem); color:var(--ink-2); line-height:1.55;
           max-width:62ch; margin:3.2vh auto 0; }
-  .meta { font-family:var(--mono); font-weight:500; font-size:min(1vw,.82rem);
+  .tagline { font-size:min(2.93vw,2.1rem); }
+  .meta { font-family:var(--mono); font-weight:500; font-size:min(1.2vw,.984rem);
           letter-spacing:.03em; color:var(--ink-muted); margin-top:5vh; }
   .red { color:var(--alarm); } .cy { color:var(--cy); }
   /* The one line on slide 5 that is meant to be repeated back. It gets its own air. */
-  .alpha { font-size:min(2.4vw,1.7rem); font-weight:600; letter-spacing:-.02em;
+  .alpha { font-size:min(2.88vw,2.04rem); font-weight:600; letter-spacing:-.02em;
            color:var(--ink); margin-top:3.5vh; }
-  .close { font-size:min(2.1vw,1.5rem); font-weight:600; letter-spacing:-.02em;
+  .close { font-size:min(2.52vw,1.8rem); font-weight:600; letter-spacing:-.02em;
            color:var(--ink); margin-top:4vh; max-width:60ch; margin-inline:auto; }
 
   /* The turn: the second beat on a slide that carries two. A hairline, not a new slide. */
   .turn { margin:5vh auto 0; padding-top:3.5vh; border-top:1px solid var(--edge-subtle);
           max-width:62ch; }
-  .turn p { font-size:min(1.95vw,1.4rem); color:var(--ink-2); line-height:1.55; }
+  .turn p { font-size:min(2.34vw,1.68rem); color:var(--ink-2); line-height:1.55; }
   .turn strong { color:var(--ink); font-weight:600; }
 
   .cols { display:grid; grid-template-columns:1fr 1fr; gap:1.8rem;
@@ -68,19 +67,19 @@
   .card { border:1px solid var(--edge-default); border-radius:3px; background:var(--base-800);
           padding:2.2rem 2rem; min-height:24vh;
           display:flex; flex-direction:column; align-items:center; gap:1rem; }
-  .tag { font-family:var(--mono); font-weight:500; font-size:min(1vw,.82rem);
+  .tag { font-family:var(--mono); font-weight:500; font-size:min(1.2vw,.984rem);
          letter-spacing:.05em; color:var(--ink-muted); }
-  .card p { font-size:min(1.75vw,1.25rem); color:var(--ink-2); line-height:1.5; max-width:34ch; }
+  .card p { font-size:min(2.1vw,1.5rem); color:var(--ink-2); line-height:1.5; max-width:34ch; }
   .verdict { color:var(--ink); font-weight:600; margin-top:auto; }
   /* A flight recorder prints its numbers in mono. */
-  .big { font-family:var(--mono); font-size:min(7vw,5.2rem); font-weight:600;
+  .big { font-family:var(--mono); font-size:min(8.4vw,6.24rem); font-weight:600;
          letter-spacing:-.045em; line-height:1; font-variant-numeric:tabular-nums; }
 
   /* The one thing that is not centred: columns of numbers need a shared left edge to compare. */
   table { border-collapse:collapse; margin:5vh auto 0; font-family:var(--mono);
           font-variant-numeric:tabular-nums; max-width:1100px; width:100%; }
-  th, td { text-align:left; padding:1.05rem .7rem; font-size:min(1.75vw,1.2rem); }
-  th { font-weight:500; font-size:min(1vw,.82rem); letter-spacing:.05em; color:var(--ink-muted);
+  th, td { text-align:left; padding:1.05rem .7rem; font-size:min(2.1vw,1.44rem); }
+  th { font-weight:500; font-size:min(1.2vw,.984rem); letter-spacing:.05em; color:var(--ink-muted);
        border-bottom:1px solid var(--edge-default); }
   td { color:var(--ink-2); border-bottom:1px solid var(--edge-subtle); }
   tr.win td { color:var(--pass); }
@@ -94,10 +93,40 @@
   .seg.now { background:var(--ink); }
   .seg.breach.now { background:var(--alarm); }
   .seg.recover.now { background:var(--pass); }
-  .num { position:absolute; right:8vw; bottom:2vh; font-family:var(--mono); font-size:.76rem;
+  .num { position:absolute; right:8vw; bottom:2vh; font-family:var(--mono); font-size:.912rem;
          letter-spacing:.03em; color:var(--ink-muted); font-variant-numeric:tabular-nums; }
-  .hint { position:absolute; left:8vw; bottom:2vh; font-family:var(--mono); font-size:.72rem;
+  .hint { position:absolute; left:8vw; bottom:2vh; font-family:var(--mono); font-size:.864rem;
           letter-spacing:.03em; color:var(--edge-default); }
+
+  /* ---- Responsive tiers. These MUST stay last in the sheet: they share their
+     specificity with the base rules above, so source order is the only thing that
+     lets them win. Sitting above the base rules they parse fine and do nothing. ---- */
+
+  /* The 20% bump is for a big room. On a short viewport (a 720p projector, or a laptop with
+     browser chrome eating the height) the densest slide would run past the bottom, and the deck
+     clips rather than scrolls, so it would go unnoticed. Back the bump out below 960px tall. */
+  @media (max-height: 960px) {
+    h2 { font-size:min(5.4vw,4.1rem); }
+    .lede, .turn p { font-size:min(1.95vw,1.4rem); }
+    .tagline { font-size:min(2.44vw,1.75rem); }
+    .big { font-size:min(7vw,5.2rem); }
+    .alpha { font-size:min(2.4vw,1.7rem); }
+    .card { min-height:20vh; padding:1.8rem 1.6rem; }
+  }
+
+  /* 720p and shorter. Type comes down again and the vertical rhythm tightens, because a clipped
+     final line on the results slide is the one failure nobody in the room would tell you about. */
+  @media (max-height: 760px) {
+    .slide { padding:5vh 8vw 9vh; }
+    h2 { font-size:min(5vw,3.2rem); }
+    .lede, .turn p { font-size:min(1.8vw,1.15rem); }
+    .tagline { font-size:min(2.25vw,1.44rem); }
+    .big { font-size:min(6vw,4rem); }
+    .alpha { font-size:min(2.2vw,1.4rem); }
+    .card { min-height:0; padding:1.4rem 1.3rem; gap:.7rem; }
+    .cols { margin-top:3vh; }
+    .kicker { margin-bottom:2.5vh; }
+  }
 </style>
 </head>
 <body>
@@ -105,20 +134,20 @@
 
   <section class="slide">
     <h1>Dhruva</h1>
-    <p class="thesis">Rollback without amnesia.</p>
-    <p class="lede">Proactive intelligence for agents that run long enough to lose the plot.</p>
-    <p class="meta">AGI House &middot; Long Horizon Agents &middot; 22 August 2026</p>
+    <p class="lede tagline">Proactive intelligence for long running agents</p>
+    <p class="meta">AGI House | Long Horizon Agents Build Day | 22 August 2026</p>
   </section>
 
   <section class="slide" data-beat="breach">
     <div class="kicker">The problem</div>
     <h2>Agents don't crash.<br />They drift.</h2>
-    <p class="lede">A tool returns something false. A summary drops the one constraint that
-      mattered. Nothing throws. The agent keeps working, confidently, on the wrong thing.</p>
+    <p class="lede">A tool hands back something false. A summary drops the one rule that
+      mattered. Nothing breaks, so nothing warns you, and the agent keeps working, confidently,
+      on the wrong thing.</p>
     <div class="turn">
-      <p>Rollback is the obvious fix, and it is <strong>lossy</strong>. Revert a commit and you
-        still remember why you wrote it. Roll an agent back and that goes too. It re-derives the
-        same facts and walks the same dead ends.</p>
+      <p>The obvious fix is a rollback. But revert a commit and you still remember why you
+        wrote it. Roll an agent back and it <strong>forgets</strong>. It learns the same things
+        twice, and walks into the same dead ends.</p>
     </div>
   </section>
 
