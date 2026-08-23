@@ -164,9 +164,8 @@
       mattered. Nothing breaks, so nothing warns you, and the agent keeps working, confidently,
       on the wrong thing.</p>
     <div class="turn">
-      <p>The obvious fix is a rollback. But revert a commit and you still remember why you
-        wrote it. Roll an agent back and it <strong>forgets</strong>. It learns the same things
-        twice, and walks into the same dead ends.</p>
+      <p>The obvious fix is a rollback. Roll an agent back and it <strong>forgets</strong>.
+        It learns the same things twice, and walks into the same dead ends.</p>
     </div>
   </section>
 
@@ -203,7 +202,8 @@
           <span><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span>
         </div>
         <div class="big" style="color:var(--pass)">12/12</div>
-        <p>It caught the sabotage, put the work back, and finished the job.</p>
+        <p>It caught the sabotage, went back to the last good state, and carried on to
+          finish the job.</p>
       </div>
       <div class="card">
         <div class="tag">Not allowed</div>
@@ -216,8 +216,8 @@
         <p>It caught the same sabotage. It just had to keep going.</p>
       </div>
     </div>
-    <p class="lede">Both runs spotted the problem. Only one could put the work back, and it kept
-      what it had learned on the way.</p>
+    <p class="lede">Both runs spotted the problem. Only one could go back to the last good state
+      and keep going, with what it had learned still intact.</p>
     <p class="alpha">The alpha is in the delta.</p>
   </section>
 
@@ -226,13 +226,13 @@
     <h2>The files went back. The learning stayed.</h2>
     <div class="cols">
       <div class="card">
-        <div class="tag">Kept &middot; 7 of 10</div>
-        <p class="belief">Adding only stub implementations is insufficient; tests require concrete ingest behavior beyond matching signatures.</p>
+        <div class="tag">Kept &middot; 8 of 11</div>
+        <p class="belief">Shared models are used by the ingest code and were inspected before implementation.</p>
         <p class="verdict">Learned before the sabotage arrived.</p>
       </div>
       <div class="card">
-        <div class="tag">Dropped &middot; 3 of 10</div>
-        <p class="belief gone">loglens.__all__ must remain exactly as-is; exports were explicitly reviewed before further edits.</p>
+        <div class="tag">Dropped &middot; 3 of 11</div>
+        <p class="belief gone">Four stub functions remain to implement in loglens/query.py.</p>
         <p class="verdict">True, and dropped anyway. Its trail runs through the lie.</p>
       </div>
     </div>
@@ -242,11 +242,12 @@
   </section>
 
   <section class="slide">
-    <h2>Only three interfaces know what agent you run.</h2>
-    <p class="lede">One event log feeds every view you saw: live, provenance graph, twin, replay.
-      Implement the seams for your agent, your models, and your task, and nothing above them
-      changes.</p>
-    <p class="close">Observability explains the failure. Proactive intelligence undoes it.</p>
+    <h2>Bring your own agent.</h2>
+    <p class="lede">Everything you just saw came from one log of what the agent did. Three
+      adapters are the only parts that know your setup: which agent, which model, which job.
+      Swap those three and it runs on yours.</p>
+    <p class="close">Other tools tell you what went wrong. Proactive intelligence puts you back to
+      the last good state, and keeps what you learned on the way.</p>
     <p class="meta cy">github.com/poudelsubhan/dhruva</p>
   </section>
 
