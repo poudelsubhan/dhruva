@@ -337,94 +337,6 @@ export default function App() {
       </header>
 
       <main className="flex flex-col gap-gutter p-panel">
-        <section className="flex flex-wrap items-end gap-gutter rounded-panel border border-edge-default bg-base-800 p-panel">
-          <div className="flex flex-col gap-tight">
-            <span className="font-mono text-micro tracking-[0.18em] text-ink-muted uppercase">
-              next run · scenario
-            </span>
-            <div className="flex flex-wrap gap-tight">
-              {SCENARIOS.map((s) => (
-                <button
-                  key={s.key}
-                  type="button"
-                  title={s.blurb}
-                  onClick={() => setScenario(s.key)}
-                  className={clsx(
-                    'rounded-mark border px-3 py-2 text-left font-mono text-micro transition-colors',
-                    scenario === s.key
-                      ? 'border-ink-muted bg-base-700 text-ink-primary'
-                      : 'border-edge-default text-ink-muted hover:border-edge-strong',
-                  )}
-                >
-                  {s.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <label className="flex flex-col gap-tight">
-            <span className="font-mono text-micro tracking-[0.18em] text-ink-muted uppercase">
-              at step
-            </span>
-            <input
-              type="number"
-              min={1}
-              value={atStep}
-              onChange={(e) => setAtStep(Number(e.target.value))}
-              className="w-20 rounded-mark border border-edge-default bg-base-900 px-2 py-2 font-mono text-caption"
-            />
-          </label>
-
-          <div className="flex flex-wrap gap-tight">
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => launch(true)}
-              className="rounded-mark border border-ink-primary bg-ink-primary px-4 py-2 font-mono text-micro tracking-[0.14em] text-ink-inverse uppercase transition-colors hover:bg-ink-secondary hover:border-ink-secondary disabled:opacity-40"
-            >
-              run with scenario
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => launch(false)}
-              className="rounded-mark border border-edge-default px-4 py-2 font-mono text-micro tracking-[0.14em] text-ink-secondary uppercase transition-colors hover:border-edge-strong disabled:opacity-40"
-            >
-              clean run
-            </button>
-            <button
-              type="button"
-              disabled={!liveRunId}
-              onClick={fireNow}
-              className="rounded-mark border border-alarm-400 px-4 py-2 font-mono text-micro tracking-[0.14em] text-alarm-400 uppercase transition-colors hover:bg-alarm-400/10 disabled:opacity-30"
-            >
-              inject now
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={launchTwin}
-              className="rounded-mark border border-edge-default px-4 py-2 font-mono text-micro tracking-[0.14em] text-ink-secondary uppercase transition-colors hover:border-edge-strong disabled:opacity-40"
-            >
-              twin run
-            </button>
-            <button
-              type="button"
-              onClick={() => openCanned('s1-supervised')}
-              className="rounded-mark border border-edge-default px-4 py-2 font-mono text-micro tracking-[0.14em] text-ink-secondary uppercase transition-colors hover:border-edge-strong"
-            >
-              demo replay
-            </button>
-            <button
-              type="button"
-              onClick={() => openMock('breach')}
-              className="rounded-mark border border-edge-default px-4 py-2 font-mono text-micro tracking-[0.14em] text-ink-muted uppercase hover:border-edge-strong"
-            >
-              mock breach
-            </button>
-          </div>
-        </section>
-
         {error ? (
           <p className="rounded-panel border border-alarm-400/50 bg-alarm-400/10 px-panel py-snug font-mono text-caption text-alarm-400">
             {error}
@@ -531,7 +443,95 @@ export default function App() {
           </p>
         )}
 
-        {runs.length > 0 ? (
+        <section className="flex flex-wrap items-end gap-gutter rounded-panel border border-edge-default bg-base-800 p-panel">
+          <div className="flex flex-col gap-tight">
+            <span className="font-mono text-micro tracking-[0.18em] text-ink-muted uppercase">
+              next run · scenario
+            </span>
+            <div className="flex flex-wrap gap-tight">
+              {SCENARIOS.map((s) => (
+                <button
+                  key={s.key}
+                  type="button"
+                  title={s.blurb}
+                  onClick={() => setScenario(s.key)}
+                  className={clsx(
+                    'rounded-mark border px-3 py-2 text-left font-mono text-micro transition-colors',
+                    scenario === s.key
+                      ? 'border-ink-muted bg-base-700 text-ink-primary'
+                      : 'border-edge-default text-ink-muted hover:border-edge-strong',
+                  )}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <label className="flex flex-col gap-tight">
+            <span className="font-mono text-micro tracking-[0.18em] text-ink-muted uppercase">
+              at step
+            </span>
+            <input
+              type="number"
+              min={1}
+              value={atStep}
+              onChange={(e) => setAtStep(Number(e.target.value))}
+              className="w-20 rounded-mark border border-edge-default bg-base-900 px-2 py-2 font-mono text-caption"
+            />
+          </label>
+
+          <div className="flex flex-wrap gap-tight">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => launch(true)}
+              className="rounded-mark border border-ink-primary bg-ink-primary px-4 py-2 font-mono text-micro tracking-[0.14em] text-ink-inverse uppercase transition-colors hover:bg-ink-secondary hover:border-ink-secondary disabled:opacity-40"
+            >
+              run with scenario
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => launch(false)}
+              className="rounded-mark border border-edge-default px-4 py-2 font-mono text-micro tracking-[0.14em] text-ink-secondary uppercase transition-colors hover:border-edge-strong disabled:opacity-40"
+            >
+              clean run
+            </button>
+            <button
+              type="button"
+              disabled={!liveRunId}
+              onClick={fireNow}
+              className="rounded-mark border border-alarm-400 px-4 py-2 font-mono text-micro tracking-[0.14em] text-alarm-400 uppercase transition-colors hover:bg-alarm-400/10 disabled:opacity-30"
+            >
+              inject now
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={launchTwin}
+              className="rounded-mark border border-edge-default px-4 py-2 font-mono text-micro tracking-[0.14em] text-ink-secondary uppercase transition-colors hover:border-edge-strong disabled:opacity-40"
+            >
+              twin run
+            </button>
+            <button
+              type="button"
+              onClick={() => openCanned('s1-supervised')}
+              className="rounded-mark border border-edge-default px-4 py-2 font-mono text-micro tracking-[0.14em] text-ink-secondary uppercase transition-colors hover:border-edge-strong"
+            >
+              demo replay
+            </button>
+            <button
+              type="button"
+              onClick={() => openMock('breach')}
+              className="rounded-mark border border-edge-default px-4 py-2 font-mono text-micro tracking-[0.14em] text-ink-muted uppercase hover:border-edge-strong"
+            >
+              mock breach
+            </button>
+          </div>
+        </section>
+
+        {runs.length > 0 && !isCanned ? (
           <section className="rounded-panel border border-edge-default bg-base-800 p-panel">
             <h2 className="mb-snug font-mono text-micro tracking-[0.18em] text-ink-muted uppercase">
               runs
