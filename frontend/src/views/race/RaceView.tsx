@@ -100,19 +100,19 @@ function Pane({
   const d = useMemo(() => derive(shown), [shown])
   const deceived = d.believed !== d.passing
   const evicted = new Set(evictedOverride ?? d.evictedIds)
-  const feed = d.actions.slice(-3)
+  const feed = d.actions.slice(-7)
   const beliefs = useMemo(() => {
     const gone = d.learnings.filter((l) => evicted.has(l.entryId))
     const kept = d.learnings.filter((l) => !evicted.has(l.entryId))
     // Evicted first: the strike-through IS the audit, and burying it defeats the beat.
-    return gone.length ? [...gone.slice(-3), ...kept.slice(-1)] : kept.slice(-4)
+    return gone.length ? [...gone.slice(-3), ...kept.slice(-2)] : kept.slice(-5)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [d.learnings, d.evictedIds, evictedOverride])
 
   return (
     <section
       className={clsx(
-        'flex min-w-0 flex-1 flex-col gap-2.5 rounded-panel border bg-base-800 p-3.5 transition-all duration-500',
+        'flex min-h-0 min-w-0 flex-1 flex-col gap-2.5 rounded-panel border bg-base-800 p-3.5 transition-all duration-500',
         accent === 'coherence' ? 'border-coherence-400/40' : 'border-alarm-400/40',
         deceived && 'border-state-warn',
       )}
@@ -152,13 +152,13 @@ function Pane({
         ) : null}
       </div>
 
-      <div className="flex min-h-[4rem] flex-col gap-0.5 font-mono text-micro">
+      <div className="flex min-h-0 flex-1 flex-col justify-end gap-1 overflow-hidden font-mono text-caption">
         {feed.length === 0 ? <span className="text-ink-muted">waiting…</span> : null}
         {feed.map((a, i) => (
           <div
             key={a.seq}
             className={clsx(
-              'truncate',
+              'shrink-0 truncate',
               i === feed.length - 1 ? 'text-ink-primary' : 'text-ink-muted',
               a.poisoned && 'text-state-warn',
             )}
@@ -170,7 +170,7 @@ function Pane({
         ))}
       </div>
 
-      <div className="mt-auto flex min-h-[5rem] flex-col gap-0.5">
+      <div className="flex min-h-0 flex-[1.2] flex-col gap-1 overflow-hidden">
         <span className="font-mono text-micro tracking-[0.14em] text-ink-muted uppercase">
           knowledge
         </span>
@@ -181,7 +181,7 @@ function Pane({
           <div
             key={b.entryId}
             className={clsx(
-              'truncate text-micro',
+              'line-clamp-2 shrink-0 text-caption leading-snug',
               evicted.has(b.entryId)
                 ? 'text-alarm-400 line-through decoration-alarm-400'
                 : 'text-ink-secondary',
@@ -241,16 +241,11 @@ export default function RaceView({ supervised, unsupervised, seq, stage = null }
   }, [stage, supervised, seq])
 
   return (
-    <div className="relative flex flex-col gap-4">
-      <div className="flex items-center justify-between font-mono text-micro tracking-[0.18em] text-ink-muted uppercase">
-        <span>same task · same sabotage at step 12 · same schedule</span>
-        <span>seq {seq}</span>
-      </div>
-
+    <div className="relative flex min-h-0 flex-1 flex-col gap-3">
       {stage ? <StageBand stage={stage} supervised={supervised} seq={seq} /> : null}
       {lie ? <TheLie content={lie} truth={truthLine} /> : null}
 
-      <div className="flex flex-row gap-4">
+      <div className="flex min-h-0 flex-1 flex-row gap-4">
         <Pane
           title="supervised"
           events={supervised}

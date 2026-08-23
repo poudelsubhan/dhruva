@@ -397,7 +397,12 @@ export default function App() {
   const activeRunId = source && 'runId' in source ? source.runId : null
 
   return (
-    <div className="flex min-h-screen bg-base-900 text-ink-primary">
+    <div
+      className={clsx(
+        'flex bg-base-900 text-ink-primary',
+        isRace ? 'h-screen overflow-hidden' : 'min-h-screen',
+      )}
+    >
       <Sidebar open={railOpen}>
         {/* Mirrors the app bar's height, so the rail's first group lines up with main's first row. */}
         <div className="h-15 shrink-0 border-b border-edge-subtle" />
@@ -558,7 +563,12 @@ export default function App() {
           </div>
         </header>
 
-        <main className="flex flex-col gap-gutter p-panel">
+        <main
+          className={clsx(
+            'flex flex-col p-panel',
+            isRace ? 'min-h-0 flex-1 gap-3' : 'gap-gutter',
+          )}
+        >
           {error ? (
             <p className="rounded-panel border border-alarm-400/50 bg-alarm-400/10 px-panel py-snug font-mono text-caption text-alarm-400">
               {error}
@@ -595,6 +605,10 @@ export default function App() {
               <span className="font-mono text-micro tracking-[0.14em] text-ink-secondary uppercase">
                 {beatLabel(shown)}
               </span>
+              <span className="hidden font-mono text-micro tracking-[0.16em] text-ink-muted uppercase xl:inline">
+                same task · same sabotage · step 12
+              </span>
+              <span className="font-mono text-micro tabular-nums text-ink-muted">seq {clock.seq}</span>
               <span className="font-mono text-micro text-ink-muted">space · R</span>
             </div>
           ) : allEvents.length > 0 ? (
@@ -667,6 +681,10 @@ export default function App() {
                 onChange={(e) => clock.seek(Number(e.target.value))}
                 className="h-1 min-w-40 flex-1 accent-coherence-400"
               />
+              <span className="hidden font-mono text-micro tracking-[0.16em] text-ink-muted uppercase xl:inline">
+                same task · same sabotage · step 12
+              </span>
+              <span className="font-mono text-micro tabular-nums text-ink-muted">seq {clock.seq}</span>
               <span className="font-mono text-micro text-ink-muted">space · R</span>
             </div>
           ) : null}
