@@ -110,7 +110,7 @@ function Pane({
       <header className="flex items-baseline justify-between gap-3">
         <h2
           className={clsx(
-            'font-mono text-small font-semibold tracking-[0.2em] uppercase',
+            'font-mono text-lead font-semibold tracking-[0.2em] uppercase',
             accent === 'coherence' ? 'text-coherence-400' : 'text-alarm-400',
           )}
         >
@@ -125,7 +125,7 @@ function Pane({
         <div>
           <div
             className={clsx(
-              'font-mono text-[3.5rem] leading-none font-bold tabular-nums transition-colors duration-500',
+              'font-mono text-readout leading-none font-bold tabular-nums transition-colors duration-500',
               passing === 12 ? 'text-state-pass' : passing === 0 ? 'text-alarm-400' : 'text-ink-primary',
             )}
           >
@@ -139,7 +139,7 @@ function Pane({
         <div className="ml-auto text-right">
           <div
             className={clsx(
-              'font-mono text-h3 leading-none tabular-nums transition-colors duration-500',
+              'font-mono text-title leading-none tabular-nums transition-colors duration-500',
               verdict === 'breach'
                 ? 'text-alarm-400'
                 : verdict === 'warn'
@@ -161,7 +161,7 @@ function Pane({
         {note ? (
           <p
             className={clsx(
-              'font-mono text-small tracking-[0.06em]',
+              'font-mono text-body tracking-[0.06em]',
               accent === 'coherence' ? 'text-coherence-400' : 'text-alarm-400',
             )}
           >
@@ -261,7 +261,7 @@ function StageBand({
           ))}
         </div>
         <div className="flex flex-wrap items-baseline gap-4">
-          <h3 className="font-mono text-h3 font-bold tracking-[0.12em] text-coherence-400 uppercase">
+          <h3 className="font-mono text-title font-bold tracking-[0.12em] text-coherence-400 uppercase">
             {meta.label}
           </h3>
           <p className="text-body text-ink-secondary">{meta.detail}</p>
@@ -270,7 +270,7 @@ function StageBand({
         {stage === 'audit' && audit ? (
           <div className="grid grid-cols-2 gap-4">
             <div className="rounded-mark border border-state-pass/40 bg-state-pass/5 p-4">
-              <div className="font-mono text-h3 font-bold text-state-pass">
+              <div className="font-mono text-display font-bold text-state-pass">
                 {audit.retained.length}
               </div>
               <div className="font-mono text-micro tracking-[0.16em] text-ink-muted uppercase">
@@ -278,7 +278,7 @@ function StageBand({
               </div>
             </div>
             <div className="rounded-mark border border-alarm-400/40 bg-alarm-400/5 p-4">
-              <div className="font-mono text-h3 font-bold text-alarm-400">
+              <div className="font-mono text-display font-bold text-alarm-400">
                 {audit.evicted.length}
               </div>
               <div className="font-mono text-micro tracking-[0.16em] text-ink-muted uppercase">
