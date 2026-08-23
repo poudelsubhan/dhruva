@@ -83,6 +83,13 @@
   .big { font-family:var(--mono); font-size:min(8.4vw,6.24rem); font-weight:600;
          letter-spacing:-.045em; line-height:1; font-variant-numeric:tabular-nums; }
 
+  /* The run's own words, in mono because that is what they are: machine-written notes.
+     A red strike is the whole explanation for the second card. */
+  .belief { font-family:var(--mono); font-size:min(1.7vw,1.1rem); line-height:1.6;
+            color:var(--ink); max-width:34ch; }
+  .belief.gone { color:var(--ink-muted); text-decoration:line-through;
+                 text-decoration-color:var(--alarm); text-decoration-thickness:2px; }
+
   /* The one thing that is not centred: columns of numbers need a shared left edge to compare. */
   table { border-collapse:collapse; margin:5vh auto 0; font-family:var(--mono);
           font-variant-numeric:tabular-nums; max-width:1100px; width:100%; }
@@ -215,20 +222,30 @@
   </section>
 
   <section class="slide">
-    <div class="kicker">Measurements</div>
-    <h2>Eviction has to be precise, or it's just amnesia.</h2>
-    <table>
-      <tr><th>Policy</th><th class="n">Kept</th><th class="n">Knowledge lost</th><th class="n">False belief kept</th></tr>
-      <tr><td>Keep everything</td><td class="n">3</td><td class="n">0</td><td class="n red">1</td></tr>
-      <tr><td>Evict the range</td><td class="n">1</td><td class="n red">1</td><td class="n">0</td></tr>
-      <tr class="win"><td>By provenance</td><td class="n">2</td><td class="n">0</td><td class="n">0</td></tr>
-    </table>
+    <div class="kicker">What survived the rollback</div>
+    <h2>The files went back. The learning stayed.</h2>
+    <div class="cols">
+      <div class="card">
+        <div class="tag">Kept &middot; 7 of 10</div>
+        <p class="belief">Adding only stub implementations is insufficient; tests require concrete ingest behavior beyond matching signatures.</p>
+        <p class="verdict">Learned before the sabotage arrived.</p>
+      </div>
+      <div class="card">
+        <div class="tag">Dropped &middot; 3 of 10</div>
+        <p class="belief gone">loglens.__all__ must remain exactly as-is; exports were explicitly reviewed before further edits.</p>
+        <p class="verdict">True, and dropped anyway. Its trail runs through the lie.</p>
+      </div>
+    </div>
+    <p class="lede">Every belief carries a record of where it came from. We drop the ones whose
+      trail runs through the lie, not the ones that look wrong. Throw the whole stretch away
+      instead, and the good work goes with it.</p>
   </section>
 
   <section class="slide">
-    <h2>One event log.<br />Three adapter seams.</h2>
-    <p class="lede">Every view reads that one log: live, provenance graph, twin, replay.
-      Point the seams at your agent and your task, and nothing above them changes.</p>
+    <h2>Only three interfaces know what agent you run.</h2>
+    <p class="lede">One event log feeds every view you saw: live, provenance graph, twin, replay.
+      Implement the seams for your agent, your models, and your task, and nothing above them
+      changes.</p>
     <p class="close">Observability explains the failure. Proactive intelligence undoes it.</p>
     <p class="meta cy">github.com/poudelsubhan/dhruva</p>
   </section>

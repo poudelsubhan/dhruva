@@ -64,7 +64,14 @@ function Term({
       >
         {value.toFixed(2)}
       </span>
-      <span className="h-2 min-w-16 flex-1 rounded-tick bg-base-700">
+      {/* A term that collapsed to zero has no fill to carry the colour, so the empty track carries
+          it instead. Otherwise the row that explains the breach is the one row with nothing on it. */}
+      <span
+        className={clsx(
+          'h-2 min-w-16 flex-1 rounded-tick',
+          collapsed ? 'bg-alarm-400/20' : 'bg-base-700',
+        )}
+      >
         <span
           className={clsx(
             'block h-full rounded-tick transition-[width] duration-500',

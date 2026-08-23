@@ -289,7 +289,7 @@ export default function LiveView({
         />
       </Panel>
 
-      <div className="grid grid-cols-1 gap-gutter lg:grid-cols-3">
+      <div className="grid grid-cols-1 items-start gap-gutter lg:grid-cols-3">
         <Panel
           title="test board"
           status={<span className="font-mono text-micro text-ink-muted tabular-nums">{passing}/12</span>}
@@ -337,7 +337,7 @@ export default function LiveView({
             </span>
           }
         >
-          <div className="flex max-h-64 flex-col gap-tight overflow-y-auto">
+          <div className="flex max-h-96 flex-col gap-tight overflow-y-auto">
             {rows.length === 0 ? <p className="text-caption text-ink-muted">Nothing learned yet.</p> : null}
             {/* Evicted first. They are the point of the panel, and burying them under ten kept rows
                 means the one thing worth pointing at is below the fold. */}
@@ -393,11 +393,12 @@ export default function LiveView({
         </Panel>
       </div>
 
-      <Panel
-        title="event inspector"
-        status={<span className="font-mono text-micro text-ink-muted">payload</span>}
-      >
-        {selected ? (
+      {/* An empty inspector should cost one line, not a whole bay. */}
+      {selected ? (
+        <Panel
+          title="event inspector"
+          status={<span className="font-mono text-micro text-ink-muted">payload</span>}
+        >
           <div className="flex flex-col gap-snug">
             <div className="flex flex-wrap items-center gap-tight">
               <EventGlyph type={selected.type} size={18} />
@@ -415,12 +416,12 @@ export default function LiveView({
               {JSON.stringify(selected.payload, null, 2)}
             </pre>
           </div>
-        ) : (
-          <p className="text-caption text-ink-muted">
-            Pick an event on the stream, or a point on the chart, to inspect it.
-          </p>
-        )}
-      </Panel>
+        </Panel>
+      ) : (
+        <p className="rounded-panel border border-edge-subtle bg-base-800 px-panel py-snug text-caption text-ink-muted">
+          Pick an event on the stream, or a point on the chart, to inspect its payload.
+        </p>
+      )}
     </div>
   )
 }
