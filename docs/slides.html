@@ -58,8 +58,8 @@
 
   /* The turn: the second beat on a slide that carries two. A hairline, not a new slide. */
   .turn { margin:5vh auto 0; padding-top:3.5vh; border-top:1px solid var(--edge-subtle);
-          max-width:62ch; }
-  .turn p { font-size:min(2.34vw,1.68rem); color:var(--ink-2); line-height:1.55; }
+          font-size:min(2.34vw,1.68rem); max-width:62ch; }
+  .turn p { color:var(--ink-2); line-height:1.55; }
   .turn strong { color:var(--ink); font-weight:600; }
 
   .cols { display:grid; grid-template-columns:1fr 1fr; gap:1.8rem;
@@ -71,6 +71,14 @@
          letter-spacing:.05em; color:var(--ink-muted); }
   .card p { font-size:min(2.1vw,1.5rem); color:var(--ink-2); line-height:1.5; max-width:34ch; }
   .verdict { color:var(--ink); font-weight:600; margin-top:auto; }
+  /* Twelve tests in three independent groups, the same board the app shows. A filled row
+     beside an empty one is the one thing on this deck nobody has to read to understand. */
+  .lamps { display:flex; gap:.9rem; justify-content:center; }
+  .lamps span { display:flex; gap:.35rem; }
+  .lamps i { width:.8rem; height:.8rem; border-radius:50%; border:1.5px solid var(--edge-strong); }
+  .lamps i.on { background:var(--pass); border-color:var(--pass); }
+  .lamps i.off { border-color:var(--alarm); }
+
   /* A flight recorder prints its numbers in mono. */
   .big { font-family:var(--mono); font-size:min(8.4vw,6.24rem); font-weight:600;
          letter-spacing:-.045em; line-height:1; font-variant-numeric:tabular-nums; }
@@ -104,22 +112,26 @@
 
   /* The 20% bump is for a big room. On a short viewport (a 720p projector, or a laptop with
      browser chrome eating the height) the densest slide would run past the bottom, and the deck
-     clips rather than scrolls, so it would go unnoticed. Back the bump out below 960px tall. */
-  @media (max-height: 960px) {
+     clips rather than scrolls, so it would go unnoticed. Back the bump out below 1050px tall. */
+  @media (max-height: 1050px) {
+    .slide { padding:6vh 8vw 10vh; }
     h2 { font-size:min(5.4vw,4.1rem); }
-    .lede, .turn p { font-size:min(1.95vw,1.4rem); }
+    .lede, .turn { font-size:min(1.95vw,1.4rem); }
     .tagline { font-size:min(2.44vw,1.75rem); }
     .big { font-size:min(7vw,5.2rem); }
-    .alpha { font-size:min(2.4vw,1.7rem); }
+    .alpha { font-size:min(2.4vw,1.7rem); margin-top:2.5vh; }
     .card { min-height:20vh; padding:1.8rem 1.6rem; }
+    .cols { margin-top:3.5vh; }
+    .kicker { margin-bottom:2.5vh; }
+    .lede { margin-top:2.4vh; }
   }
 
-  /* 720p and shorter. Type comes down again and the vertical rhythm tightens, because a clipped
+  /* 850px and shorter. Type comes down again and the vertical rhythm tightens, because a clipped
      final line on the results slide is the one failure nobody in the room would tell you about. */
-  @media (max-height: 760px) {
+  @media (max-height: 850px) {
     .slide { padding:5vh 8vw 9vh; }
     h2 { font-size:min(5vw,3.2rem); }
-    .lede, .turn p { font-size:min(1.8vw,1.15rem); }
+    .lede, .turn { font-size:min(1.8vw,1.15rem); }
     .tagline { font-size:min(2.25vw,1.44rem); }
     .big { font-size:min(6vw,4rem); }
     .alpha { font-size:min(2.2vw,1.4rem); }
@@ -173,22 +185,32 @@
   </section>
 
   <section class="slide" data-beat="recover">
-    <div class="kicker">Same task, same corruption, same schedule</div>
+    <div class="kicker">Same job. Same sabotage. Same moment.</div>
     <h2>Seeing the drift was never the problem.</h2>
     <div class="cols">
       <div class="card">
-        <div class="tag">Supervised</div>
+        <div class="tag">Allowed to undo</div>
+        <div class="lamps">
+          <span><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span>
+          <span><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span>
+          <span><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span>
+        </div>
         <div class="big" style="color:var(--pass)">12/12</div>
-        <p>1 breach &middot; 1 rollback &middot; recovered</p>
+        <p>It caught the sabotage, put the work back, and finished the job.</p>
       </div>
       <div class="card">
-        <div class="tag">Unsupervised</div>
+        <div class="tag">Not allowed</div>
+        <div class="lamps">
+          <span><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i></span>
+          <span><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i></span>
+          <span><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i></span>
+        </div>
         <div class="big red">0/12</div>
-        <p>2 breaches detected &middot; 0 rollbacks</p>
+        <p>It caught the same sabotage. It just had to keep going.</p>
       </div>
     </div>
-    <p class="lede">The second run saw all of it and finished with nothing. The only thing
-      between these two numbers is permission to act.</p>
+    <p class="lede">Both runs spotted the problem. Only one could put the work back, and it kept
+      what it had learned on the way.</p>
     <p class="alpha">The alpha is in the delta.</p>
   </section>
 

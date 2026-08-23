@@ -122,6 +122,14 @@ export function derive(events: readonly DhruvaEvent[]): DerivedRun {
         targetId: event.payload.target_checkpoint_id,
         discarded: event.payload.discarded_range,
       })
+      // D11.4 — a rollback truncates the chain AT its target. A checkpoint minted inside the
+      // discarded range no longer exists on the backend, and a UI that keeps drawing it is
+      // showing a rollback target that cannot be rolled back to.
+      if (target) {
+        for (let i = checkpoints.length - 1; i >= 0; i -= 1) {
+          if (checkpoints[i].seq > target.seq) checkpoints.splice(i, 1)
+        }
+      }
     } else if (isEvent('learning')(event)) {
       learnings.push({
         entryId: event.payload.entry_id,

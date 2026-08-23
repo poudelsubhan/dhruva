@@ -36,7 +36,9 @@ export type CoherenceChartProps = {
   height?: number
 }
 
-const PAD = { top: 20, right: 92, bottom: 26, left: 12 }
+const PAD = { top: 20, right: 92, bottom: 26, left: 40 }
+/** Where the y axis is labelled. The two gates carry their own labels on the right. */
+const Y_TICKS = [0, 0.5, 1]
 /** Minimum vertical separation between two gate labels before they start to collide. */
 const LABEL_GAP = 15
 
@@ -109,8 +111,29 @@ export function CoherenceChart({
         aria-label={`Coherence across ${points.length} verification windows, against a breach gate of ${thresholds.breach} and a warn gate of ${thresholds.warn}`}
       >
         {/* Zones. Below the breach gate is a place on this chart, not just a number. */}
-        <rect x={PAD.left} y={yBreach} width={plotW} height={PAD.top + plotH - yBreach} fill={ALARM_ACCENT} opacity={0.07} />
-        <rect x={PAD.left} y={yWarn} width={plotW} height={yBreach - yWarn} fill={color.state.warn} opacity={0.11} />
+        <rect x={PAD.left} y={yBreach} width={plotW} height={PAD.top + plotH - yBreach} fill={ALARM_ACCENT} opacity={0.04} />
+        <rect x={PAD.left} y={yWarn} width={plotW} height={yBreach - yWarn} fill={color.state.warn} opacity={0.14} />
+
+        {/* y axis. Three labels only: the two gates already carry numbers of their own. */}
+        <g className="font-mono tabular-nums" fontSize={11}>
+          {Y_TICKS.map((t) => (
+            <g key={`y-${t}`}>
+              {t > 0 ? (
+                <line
+                  x1={PAD.left}
+                  y1={y(t)}
+                  x2={PAD.left + plotW}
+                  y2={y(t)}
+                  stroke={color.edge.subtle}
+                  strokeWidth={1}
+                />
+              ) : null}
+              <text x={PAD.left - 8} y={y(t) + 3.5} textAnchor="end" fill={color.ink.muted}>
+                {t.toFixed(2)}
+              </text>
+            </g>
+          ))}
+        </g>
 
         {/* Discarded range: what the rollback threw away, struck out in place. */}
         {discarded.map(([from, to]) => (
@@ -120,8 +143,8 @@ export function CoherenceChart({
               y={PAD.top}
               width={Math.max(1, x(to) - x(from))}
               height={plotH}
-              fill={ALARM_ACCENT}
-              opacity={0.06}
+              fill={color.base[950]}
+              opacity={0.62}
             />
             <line x1={x(from)} y1={PAD.top} x2={x(from)} y2={PAD.top + plotH} stroke={ALARM_ACCENT} strokeWidth={1} strokeDasharray="3 3" opacity={0.65} />
             <line x1={x(to)} y1={PAD.top} x2={x(to)} y2={PAD.top + plotH} stroke={ALARM_ACCENT} strokeWidth={1} strokeDasharray="3 3" opacity={0.65} />
@@ -129,7 +152,7 @@ export function CoherenceChart({
               x={(x(from) + x(to)) / 2}
               y={PAD.top - 7}
               textAnchor="middle"
-              fill={ALARM_ACCENT}
+              fill={color.ink.muted}
               className="font-mono"
               fontSize={11}
               letterSpacing="0.14em"
@@ -169,6 +192,15 @@ export function CoherenceChart({
         {selectedSeq !== null ? (
           <line x1={x(selectedSeq)} y1={PAD.top - 4} x2={x(selectedSeq)} y2={PAD.top + plotH + 4} stroke={color.ink.primary} strokeWidth={1} opacity={0.5} />
         ) : null}
+
+        <line
+          x1={PAD.left}
+          y1={PAD.top + plotH}
+          x2={PAD.left + plotW}
+          y2={PAD.top + plotH}
+          stroke={color.edge.default}
+          strokeWidth={2}
+        />
 
         {points.length >= 2 ? (
           <path d={line} fill="none" stroke={color.coherence[500]} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
