@@ -11,6 +11,13 @@ import clsx from 'clsx'
 import LiveView from './views/live/LiveView'
 import TwinView from './views/twin/TwinView'
 import GraphView from './views/graph/GraphView'
+import {
+  Sidebar,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarItem,
+  SidebarToggle,
+} from './components/shell/Sidebar'
 import RaceView, { useRaceClock } from './views/race/RaceView'
 import { useRunStream } from './data/useRunStream'
 import { usePlayback } from './data/usePlayback'
@@ -21,8 +28,10 @@ import {
   getLedger,
   getMockRun,
   getRunEvents,
+  listCanned,
   listRuns,
   startRun,
+  type CannedRun,
   type DhruvaConfig,
   type LedgerEntryView,
   type RunSummary,
@@ -81,6 +90,8 @@ export default function App() {
   const [staticEvents, setStaticEvents] = useState<DhruvaEvent[]>([])
   const [ledger, setLedger] = useState<LedgerEntryView[]>([])
   const [runs, setRuns] = useState<RunSummary[]>([])
+  const [canned, setCanned] = useState<CannedRun[]>([])
+  const [railOpen, setRailOpen] = useState(true)
   const [scenario, setScenario] = useState<string>('s2')
   const [atStep, setAtStep] = useState(12)
   const [busy, setBusy] = useState(false)
@@ -103,6 +114,23 @@ export default function App() {
     if (!new URLSearchParams(window.location.search).has('demo')) return
     void openRace()
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    listCanned()
+      .then(setCanned)
+      .catch(() => undefined)
+  }, [])
+
+  // cmd/ctrl B, the binding every editor and shadcn's own sidebar already use.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() !== 'b' || !(e.metaKey || e.ctrlKey)) return
+      e.preventDefault()
+      setRailOpen((open) => !open)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
   }, [])
 
   const refreshRuns = useCallback(() => {
@@ -177,7 +205,13 @@ export default function App() {
   const allEvents = source?.kind === 'live' ? stream.events : staticEvents
   const isCanned = source?.kind === 'canned'
   // What the header pill reports is what you are LOOKING AT, not whether a key is configured.
-  const isStatic = source?.kind === 'canned' || source?.kind === 'mock' || source?.kind === 'replay'
+  const isStatic =
+    source?.kind === 'canned' ||
+    source?.kind === 'mock' ||
+    source?.kind === 'replay' ||
+    // The race reads two recorded logs. The pill reports what is on screen, not what a key
+    // would allow, so it must not claim a live provider here either.
+    source?.kind === 'race'
   const playback = usePlayback(isCanned ? allEvents : [], 60_000)
   const maxSeq = allEvents.length ? allEvents[allEvents.length - 1].seq : 0
 
@@ -360,199 +394,96 @@ export default function App() {
   else if (source?.kind === 'race') label = 'supervised vs unsupervised'
   else if (source?.kind === 'live' || source?.kind === 'replay') label = source.runId
 
+  const activeRunId = source && 'runId' in source ? source.runId : null
+
   return (
-    <div className="min-h-screen bg-base-900 text-ink-primary">
-      <header className="flex flex-wrap items-center justify-between gap-gutter border-b border-edge-subtle px-panel py-snug">
-        <div className="flex items-baseline gap-3">
-          <h1 className="text-title font-semibold tracking-tight">Dhruva</h1>
-          <p className="font-mono text-micro tracking-[0.18em] text-ink-muted uppercase">
-            agent supervisor · flight recorder
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-tight">
-          {config ? (
-            <>
-              <Pill tone={isStatic ? 'idle' : config.live_provider ? 'ok' : 'warn'}>
-                {isStatic ? 'replaying a recorded run' : config.live_provider ? 'live provider' : 'mock provider'}
-              </Pill>
-              <span className="font-mono text-micro text-ink-muted">
-                agent scripted · judge {config.models.judge}
+    <div className="flex min-h-screen bg-base-900 text-ink-primary">
+      <Sidebar open={railOpen}>
+        {/* Mirrors the app bar's height, so the rail's first group lines up with main's first row. */}
+        <div className="h-15 shrink-0 border-b border-edge-subtle" />
+
+        <SidebarGroup label="recorded">
+          {/* The headline demo: both arms of one task on one clock. It reads two recorded logs, so
+              it belongs with the recordings rather than with the controls that start new runs. */}
+          <SidebarItem active={source?.kind === 'race'} onClick={openRace} disabled={busy}>
+            <span className="font-mono text-caption text-ink-primary">
+              ▶ supervised vs unsupervised
+            </span>
+            <span className="font-mono text-micro text-ink-muted">two real runs · one clock</span>
+          </SidebarItem>
+          {canned.map((c) => (
+            <SidebarItem
+              key={c.name}
+              active={source?.kind === 'canned' && source.name === c.name}
+              onClick={() => openCanned(c.name)}
+              title="A real log from a real run, replayed through the live render path"
+            >
+              <span className="font-mono text-caption text-ink-primary">{c.name}</span>
+              <span className="font-mono text-micro text-ink-muted tabular-nums">
+                {c.events} events · {c.breaches} breach · {Math.round((c.score ?? 0) * 12)}/12
               </span>
-            </>
-          ) : (
-            <Pill tone="idle">connecting</Pill>
-          )}
-        </div>
-      </header>
+            </SidebarItem>
+          ))}
+          <SidebarItem active={source?.kind === 'mock'} onClick={() => openMock('breach')}>
+            <span className="font-mono text-caption text-ink-primary">mock breach</span>
+            <span className="font-mono text-micro text-ink-muted">offline fixture</span>
+          </SidebarItem>
+        </SidebarGroup>
 
-      <main className="flex flex-col gap-gutter p-panel">
-        {error ? (
-          <p className="rounded-panel border border-alarm-400/50 bg-alarm-400/10 px-panel py-snug font-mono text-caption text-alarm-400">
-            {error}
-          </p>
-        ) : null}
+        <SidebarGroup label={`runs · ${runs.length}`}>
+          {runs.length === 0 ? (
+            <p className="px-tick text-caption text-ink-muted">Nothing yet. Start one below.</p>
+          ) : null}
+          {runs.map((r) => (
+            <SidebarItem
+              key={r.run_id}
+              active={activeRunId === r.run_id}
+              onClick={() => openRun(r)}
+              title={`${r.events} events · ${r.checkpoints} checkpoints`}
+            >
+              <span className="flex w-full items-center gap-tight font-mono text-caption text-ink-primary">
+                <span className="truncate">{r.run_id}</span>
+                {r.rollbacks ? (
+                  <span className="text-alarm-400 tabular-nums">↩ {r.rollbacks}</span>
+                ) : null}
+                <span className="ml-auto text-ink-muted tabular-nums">
+                  {Math.round(r.progress * 12)}/12
+                </span>
+              </span>
+              <span className="flex w-full items-center gap-tight truncate font-mono text-micro text-ink-muted">
+                <span>{r.mode}</span>
+                {r.twin_id ? <span>twin</span> : null}
+                {r.scenario ? <span className="text-state-warn">{r.scenario}</span> : null}
+                <span className="truncate">{r.state.replace(/_/g, ' ')}</span>
+              </span>
+            </SidebarItem>
+          ))}
+        </SidebarGroup>
 
-        {isCanned && allEvents.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-gutter rounded-panel border border-edge-default bg-base-800 px-panel py-snug">
-            <button
-              type="button"
-              onClick={playback.toggle}
-              className="rounded-mark border border-edge-default px-4 py-2 font-mono text-micro tracking-[0.14em] text-ink-secondary uppercase transition-colors hover:border-edge-strong"
-            >
-              {playback.playing ? '❚❚ pause' : '▶ play'}
-            </button>
-            <button
-              type="button"
-              onClick={playback.restart}
-              className="rounded-mark border border-edge-default px-3 py-2 font-mono text-micro tracking-[0.14em] text-ink-secondary uppercase hover:border-edge-strong"
-            >
-              ↺ restart
-            </button>
-            <input
-              type="range"
-              min={0}
-              max={Math.max(0, allEvents.length - 1)}
-              value={playback.index}
-              onChange={(e) => playback.seek(Number(e.target.value))}
-              className="h-1 min-w-40 flex-1 accent-ink-secondary"
-            />
-            <span className="font-mono text-micro text-ink-muted">
-              {playback.index + 1}/{allEvents.length}
-            </span>
-            <span className="font-mono text-micro tracking-[0.14em] text-ink-secondary uppercase">
-              {beatLabel(shown)}
-            </span>
-            <span className="font-mono text-micro text-ink-muted">space · R</span>
-          </div>
-        ) : allEvents.length > 0 ? (
-          <div className="flex items-center gap-gutter rounded-panel border border-edge-default bg-base-800 px-panel py-snug">
-            <span className="font-mono text-micro tracking-[0.18em] text-ink-muted uppercase">
-              scrub
-            </span>
-            <input
-              type="range"
-              min={0}
-              max={maxSeq}
-              value={scrub ?? maxSeq}
-              onChange={(e) => setScrub(Number(e.target.value))}
-              className="h-1 flex-1 accent-ink-secondary"
-            />
-            <span className="w-24 text-right font-mono text-micro text-ink-muted">
-              seq {scrub ?? maxSeq}/{maxSeq}
-            </span>
-            <button
-              type="button"
-              onClick={() => setScrub(null)}
-              className="font-mono text-micro text-ink-muted underline-offset-2 hover:underline"
-            >
-              live
-            </button>
-          </div>
-        ) : null}
-
-        {source && source.kind !== 'twin' && source.kind !== 'race' ? (
-          <div className="flex gap-tight">
-            {(['timeline', 'graph'] as const).map((v) => (
+        <SidebarFooter>
+          <span className="font-mono text-micro tracking-[0.18em] text-ink-muted uppercase">
+            next run · scenario
+          </span>
+          <div className="flex flex-col gap-tick">
+            {SCENARIOS.map((sc) => (
               <button
-                key={v}
+                key={sc.key}
                 type="button"
-                onClick={() => setView(v)}
+                title={sc.blurb}
+                onClick={() => setScenario(sc.key)}
                 className={clsx(
-                  'rounded-mark border px-3 py-1 font-mono text-micro tracking-[0.14em] uppercase',
-                  view === v
-                    ? 'border-ink-primary text-ink-primary'
+                  'rounded-mark border px-snug py-tick text-left font-mono text-micro transition-colors',
+                  scenario === sc.key
+                    ? 'border-ink-muted bg-base-700 text-ink-primary'
                     : 'border-edge-default text-ink-muted hover:border-edge-strong',
                 )}
               >
-                {v}
+                {sc.label}
               </button>
             ))}
           </div>
-        ) : null}
 
-        {isRace && race ? (
-          <div className="flex flex-wrap items-center gap-gutter rounded-panel border border-coherence-400/40 bg-base-800 px-panel py-snug">
-            <button
-              type="button"
-              onClick={() => (clock.inStage ? clock.advanceStage() : clock.playing ? clock.pause() : clock.play())}
-              className="rounded-mark border border-coherence-400 px-5 py-2 font-mono text-micro tracking-[0.14em] text-coherence-400 uppercase hover:bg-coherence-400/10"
-            >
-              {clock.inStage ? '→ next beat' : clock.playing ? '❚❚ pause' : '▶ play'}
-            </button>
-            <button
-              type="button"
-              onClick={clock.restart}
-              className="rounded-mark border border-edge-default px-3 py-2 font-mono text-micro tracking-[0.14em] text-ink-secondary uppercase hover:border-edge-strong"
-            >
-              ↺ restart
-            </button>
-            <input
-              type="range"
-              min={0}
-              max={raceMax}
-              value={clock.seq}
-              onChange={(e) => clock.seek(Number(e.target.value))}
-              className="h-1 min-w-40 flex-1 accent-coherence-400"
-            />
-            <span className="font-mono text-micro text-ink-muted">space · R</span>
-          </div>
-        ) : null}
-
-        {isRace && race ? (
-          <RaceView
-            supervised={race.supervised}
-            unsupervised={race.unsupervised}
-            seq={clock.seq}
-            stage={clock.stage}
-          />
-        ) : source?.kind === 'twin' ? (
-          <TwinView
-            supervised={twin?.supervised ?? []}
-            unsupervised={twin?.unsupervised ?? []}
-          />
-        ) : source && view === 'graph' ? (
-          <GraphView events={shown} />
-        ) : source ? (
-          <LiveView
-            events={shown}
-            config={config}
-            ledger={ledger}
-            connected={source.kind === 'live' && stream.connected}
-            label={label}
-            playhead={scrub}
-          />
-        ) : (
-          <p className="rounded-panel border border-edge-default bg-base-800 px-panel py-12 text-center text-ink-muted">
-            Start a run, or open the mock breach log.
-          </p>
-        )}
-
-        <section className="flex flex-wrap items-end gap-gutter rounded-panel border border-edge-default bg-base-800 p-panel">
-          <div className="flex flex-col gap-tight">
-            <span className="font-mono text-micro tracking-[0.18em] text-ink-muted uppercase">
-              next run · scenario
-            </span>
-            <div className="flex flex-wrap gap-tight">
-              {SCENARIOS.map((s) => (
-                <button
-                  key={s.key}
-                  type="button"
-                  title={s.blurb}
-                  onClick={() => setScenario(s.key)}
-                  className={clsx(
-                    'rounded-mark border px-3 py-2 text-left font-mono text-micro transition-colors',
-                    scenario === s.key
-                      ? 'border-ink-muted bg-base-700 text-ink-primary'
-                      : 'border-edge-default text-ink-muted hover:border-edge-strong',
-                  )}
-                >
-                  {s.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <label className="flex flex-col gap-tight">
+          <label className="flex items-center justify-between gap-tight">
             <span className="font-mono text-micro tracking-[0.18em] text-ink-muted uppercase">
               at step
             </span>
@@ -561,95 +492,217 @@ export default function App() {
               min={1}
               value={atStep}
               onChange={(e) => setAtStep(Number(e.target.value))}
-              className="w-20 rounded-mark border border-edge-default bg-base-900 px-2 py-2 font-mono text-caption"
+              className="w-20 rounded-mark border border-edge-default bg-base-900 px-2 py-1 font-mono text-caption"
             />
           </label>
 
-          <div className="flex flex-wrap gap-tight">
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => launch(true)}
-              className="rounded-mark border border-ink-primary bg-ink-primary px-4 py-2 font-mono text-micro tracking-[0.14em] text-ink-inverse uppercase transition-colors hover:bg-ink-secondary hover:border-ink-secondary disabled:opacity-40"
-            >
-              run with scenario
-            </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => launch(true)}
+            className="rounded-mark border border-ink-primary bg-ink-primary px-snug py-2 font-mono text-micro tracking-[0.14em] text-ink-inverse uppercase transition-colors hover:border-ink-secondary hover:bg-ink-secondary disabled:opacity-40"
+          >
+            run with scenario
+          </button>
+          <div className="grid grid-cols-2 gap-tick">
             <button
               type="button"
               disabled={busy}
               onClick={() => launch(false)}
-              className="rounded-mark border border-edge-default px-4 py-2 font-mono text-micro tracking-[0.14em] text-ink-secondary uppercase transition-colors hover:border-edge-strong disabled:opacity-40"
+              className="rounded-mark border border-edge-default px-snug py-2 font-mono text-micro tracking-[0.14em] text-ink-secondary uppercase transition-colors hover:border-edge-strong disabled:opacity-40"
             >
               clean run
             </button>
             <button
               type="button"
-              disabled={!liveRunId}
-              onClick={fireNow}
-              className="rounded-mark border border-alarm-400 px-4 py-2 font-mono text-micro tracking-[0.14em] text-alarm-400 uppercase transition-colors hover:bg-alarm-400/10 disabled:opacity-30"
-            >
-              inject now
-            </button>
-            <button
-              type="button"
               disabled={busy}
               onClick={launchTwin}
-              className="rounded-mark border border-edge-default px-4 py-2 font-mono text-micro tracking-[0.14em] text-ink-secondary uppercase transition-colors hover:border-edge-strong disabled:opacity-40"
+              className="rounded-mark border border-edge-default px-snug py-2 font-mono text-micro tracking-[0.14em] text-ink-secondary uppercase transition-colors hover:border-edge-strong disabled:opacity-40"
             >
               twin run
             </button>
-            <button
-              type="button"
-              onClick={openRace}
-              className="rounded-mark border border-coherence-400 px-4 py-2 font-mono text-micro tracking-[0.14em] text-coherence-400 uppercase hover:bg-coherence-400/10"
-            >
-              ▶ demo
-            </button>
-            <button
-              type="button"
-              onClick={() => openCanned('s1-supervised')}
-              className="rounded-mark border border-edge-default px-4 py-2 font-mono text-micro tracking-[0.14em] text-ink-secondary uppercase transition-colors hover:border-edge-strong"
-            >
-              demo replay
-            </button>
-            <button
-              type="button"
-              onClick={() => openMock('breach')}
-              className="rounded-mark border border-edge-default px-4 py-2 font-mono text-micro tracking-[0.14em] text-ink-muted uppercase hover:border-edge-strong"
-            >
-              mock breach
-            </button>
           </div>
-        </section>
+          <button
+            type="button"
+            disabled={!liveRunId}
+            onClick={fireNow}
+            className="rounded-mark border border-alarm-400 px-snug py-2 font-mono text-micro tracking-[0.14em] text-alarm-400 uppercase transition-colors hover:bg-alarm-400/10 disabled:opacity-30"
+          >
+            inject now
+          </button>
+        </SidebarFooter>
+      </Sidebar>
 
-        {runs.length > 0 && !isCanned ? (
-          <section className="rounded-panel border border-edge-default bg-base-800 p-panel">
-            <h2 className="mb-snug font-mono text-micro tracking-[0.18em] text-ink-muted uppercase">
-              runs
-            </h2>
-            <div className="flex flex-col gap-tight">
-              {runs.map((r) => (
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex flex-wrap items-center justify-between gap-gutter border-b border-edge-subtle px-panel py-snug">
+          <div className="flex items-center gap-3">
+            <SidebarToggle open={railOpen} onToggle={() => setRailOpen((open) => !open)} />
+            <h1 className="text-title font-semibold tracking-tight">Dhruva</h1>
+            <p className="font-mono text-micro tracking-[0.18em] text-ink-muted uppercase">
+              agent supervisor · flight recorder
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-tight">
+            {config ? (
+              <>
+                <Pill tone={isStatic ? 'idle' : config.live_provider ? 'ok' : 'warn'}>
+                  {isStatic ? 'replaying a recorded run' : config.live_provider ? 'live provider' : 'mock provider'}
+                </Pill>
+                <span className="font-mono text-micro text-ink-muted">
+                  agent scripted · judge {config.models.judge}
+                </span>
+              </>
+            ) : (
+              <Pill tone="idle">connecting</Pill>
+            )}
+          </div>
+        </header>
+
+        <main className="flex flex-col gap-gutter p-panel">
+          {error ? (
+            <p className="rounded-panel border border-alarm-400/50 bg-alarm-400/10 px-panel py-snug font-mono text-caption text-alarm-400">
+              {error}
+            </p>
+          ) : null}
+
+          {isCanned && allEvents.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-gutter rounded-panel border border-edge-default bg-base-800 px-panel py-snug">
+              <button
+                type="button"
+                onClick={playback.toggle}
+                className="rounded-mark border border-edge-default px-4 py-2 font-mono text-micro tracking-[0.14em] text-ink-secondary uppercase transition-colors hover:border-edge-strong"
+              >
+                {playback.playing ? '❚❚ pause' : '▶ play'}
+              </button>
+              <button
+                type="button"
+                onClick={playback.restart}
+                className="rounded-mark border border-edge-default px-3 py-2 font-mono text-micro tracking-[0.14em] text-ink-secondary uppercase hover:border-edge-strong"
+              >
+                ↺ restart
+              </button>
+              <input
+                type="range"
+                min={0}
+                max={Math.max(0, allEvents.length - 1)}
+                value={playback.index}
+                onChange={(e) => playback.seek(Number(e.target.value))}
+                className="h-1 min-w-40 flex-1 accent-ink-secondary"
+              />
+              <span className="font-mono text-micro text-ink-muted">
+                {playback.index + 1}/{allEvents.length}
+              </span>
+              <span className="font-mono text-micro tracking-[0.14em] text-ink-secondary uppercase">
+                {beatLabel(shown)}
+              </span>
+              <span className="font-mono text-micro text-ink-muted">space · R</span>
+            </div>
+          ) : allEvents.length > 0 ? (
+            <div className="flex items-center gap-gutter rounded-panel border border-edge-default bg-base-800 px-panel py-snug">
+              <span className="font-mono text-micro tracking-[0.18em] text-ink-muted uppercase">
+                scrub
+              </span>
+              <input
+                type="range"
+                min={0}
+                max={maxSeq}
+                value={scrub ?? maxSeq}
+                onChange={(e) => setScrub(Number(e.target.value))}
+                className="h-1 flex-1 accent-ink-secondary"
+              />
+              <span className="w-24 text-right font-mono text-micro text-ink-muted">
+                seq {scrub ?? maxSeq}/{maxSeq}
+              </span>
+              <button
+                type="button"
+                onClick={() => setScrub(null)}
+                className="font-mono text-micro text-ink-muted underline-offset-2 hover:underline"
+              >
+                live
+              </button>
+            </div>
+          ) : null}
+
+          {source && source.kind !== 'twin' && source.kind !== 'race' ? (
+            <div className="flex gap-tight">
+              {(['timeline', 'graph'] as const).map((v) => (
                 <button
-                  key={r.run_id}
+                  key={v}
                   type="button"
-                  onClick={() => openRun(r)}
-                  className="flex flex-wrap items-center gap-gutter rounded-mark border border-edge-subtle px-3 py-2 text-left font-mono text-micro text-ink-secondary hover:border-edge-strong"
+                  onClick={() => setView(v)}
+                  className={clsx(
+                    'rounded-mark border px-3 py-1 font-mono text-micro tracking-[0.14em] uppercase',
+                    view === v
+                      ? 'border-ink-primary text-ink-primary'
+                      : 'border-edge-default text-ink-muted hover:border-edge-strong',
+                  )}
                 >
-                  <span className="text-ink-primary">{r.run_id}</span>
-                  <span>{r.mode}</span>
-                  {r.twin_id ? <span className="text-ink-secondary">twin</span> : null}
-                  {r.scenario ? <span className="text-state-warn">{r.scenario}</span> : null}
-                  <span>{r.state}</span>
-                  <span>{r.events} events</span>
-                  <span>{r.checkpoints} ckpt</span>
-                  {r.rollbacks ? <span className="text-alarm-400">{r.rollbacks} rollback</span> : null}
-                  <span>{Math.round(r.progress * 12)}/12</span>
+                  {v}
                 </button>
               ))}
             </div>
-          </section>
-        ) : null}
-      </main>
+          ) : null}
+
+          {isRace && race ? (
+            <div className="flex flex-wrap items-center gap-gutter rounded-panel border border-coherence-400/40 bg-base-800 px-panel py-snug">
+              <button
+                type="button"
+                onClick={() => (clock.inStage ? clock.advanceStage() : clock.playing ? clock.pause() : clock.play())}
+                className="rounded-mark border border-coherence-400 px-5 py-2 font-mono text-micro tracking-[0.14em] text-coherence-400 uppercase hover:bg-coherence-400/10"
+              >
+                {clock.inStage ? '→ next beat' : clock.playing ? '❚❚ pause' : '▶ play'}
+              </button>
+              <button
+                type="button"
+                onClick={clock.restart}
+                className="rounded-mark border border-edge-default px-3 py-2 font-mono text-micro tracking-[0.14em] text-ink-secondary uppercase hover:border-edge-strong"
+              >
+                ↺ restart
+              </button>
+              <input
+                type="range"
+                min={0}
+                max={raceMax}
+                value={clock.seq}
+                onChange={(e) => clock.seek(Number(e.target.value))}
+                className="h-1 min-w-40 flex-1 accent-coherence-400"
+              />
+              <span className="font-mono text-micro text-ink-muted">space · R</span>
+            </div>
+          ) : null}
+
+          {isRace && race ? (
+            <RaceView
+              supervised={race.supervised}
+              unsupervised={race.unsupervised}
+              seq={clock.seq}
+              stage={clock.stage}
+            />
+          ) : source?.kind === 'twin' ? (
+            <TwinView
+              supervised={twin?.supervised ?? []}
+              unsupervised={twin?.unsupervised ?? []}
+            />
+          ) : source && view === 'graph' ? (
+            <GraphView events={shown} />
+          ) : source ? (
+            <LiveView
+              events={shown}
+              config={config}
+              ledger={ledger}
+              connected={source.kind === 'live' && stream.connected}
+              label={label}
+              playhead={scrub}
+            />
+          ) : (
+            <p className="rounded-panel border border-edge-default bg-base-800 px-panel py-12 text-center text-ink-muted">
+              Start a run, or open the mock breach log.
+            </p>
+          )}
+
+
+        </main>
+      </div>
     </div>
   )
 }

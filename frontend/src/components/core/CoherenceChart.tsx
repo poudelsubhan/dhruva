@@ -110,9 +110,15 @@ export function CoherenceChart({
         role="img"
         aria-label={`Coherence across ${points.length} verification windows, against a breach gate of ${thresholds.breach} and a warn gate of ${thresholds.warn}`}
       >
-        {/* Zones. Below the breach gate is a place on this chart, not just a number. */}
-        <rect x={PAD.left} y={yBreach} width={plotW} height={PAD.top + plotH - yBreach} fill={ALARM_ACCENT} opacity={0.04} />
-        <rect x={PAD.left} y={yWarn} width={plotW} height={yBreach - yWarn} fill={color.state.warn} opacity={0.14} />
+        {/* Zones. Below the breach gate is a place on this chart, not just a number. Held back
+            until a window has actually closed: an empty plot washed in alarm is the first thing a
+            cold page shows, and nothing has gone wrong yet. */}
+        {points.length ? (
+          <>
+            <rect x={PAD.left} y={yBreach} width={plotW} height={PAD.top + plotH - yBreach} fill={ALARM_ACCENT} opacity={0.04} />
+            <rect x={PAD.left} y={yWarn} width={plotW} height={yBreach - yWarn} fill={color.state.warn} opacity={0.14} />
+          </>
+        ) : null}
 
         {/* y axis. Three labels only: the two gates already carry numbers of their own. */}
         <g className="font-mono tabular-nums" fontSize={11}>

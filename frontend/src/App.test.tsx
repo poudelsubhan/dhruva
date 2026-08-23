@@ -120,6 +120,10 @@ describe('demo replay', () => {
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input)
         if (url.includes('/api/config')) return new Response(JSON.stringify(CONFIG))
+        if (url.endsWith('/api/canned'))
+          return new Response(
+            JSON.stringify([{ name: 's1-supervised', events: 4, rollbacks: 1, breaches: 1, score: 1 }]),
+          )
         if (url.includes('/api/canned/')) return new Response(CANNED)
         if (url.includes('/api/runs')) return new Response(JSON.stringify([]))
         return new Response('[]')
@@ -129,7 +133,7 @@ describe('demo replay', () => {
 
   it('loads the canned run and shows presenter controls', async () => {
     render(<App />)
-    await userEvent.click(screen.getByRole('button', { name: /demo replay/i }))
+    await userEvent.click(await screen.findByRole('button', { name: /s1-supervised/i }))
     // Presenter controls, not a scrub bar: on stage you press play, not drag.
     expect(await screen.findByRole('button', { name: '▶ play' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /restart/i })).toBeInTheDocument()
@@ -137,13 +141,13 @@ describe('demo replay', () => {
 
   it('starts paused at the first event so nothing runs before you are ready', async () => {
     render(<App />)
-    await userEvent.click(screen.getByRole('button', { name: /demo replay/i }))
+    await userEvent.click(await screen.findByRole('button', { name: /s1-supervised/i }))
     expect(await screen.findByText('1/4')).toBeInTheDocument()
   })
 
   it('names the beat on screen so the presenter can narrate it', async () => {
     render(<App />)
-    await userEvent.click(screen.getByRole('button', { name: /demo replay/i }))
+    await userEvent.click(await screen.findByRole('button', { name: /s1-supervised/i }))
     expect(await screen.findByText(/starting/i)).toBeInTheDocument()
   })
 })
