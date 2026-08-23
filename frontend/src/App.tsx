@@ -11,6 +11,7 @@ import clsx from 'clsx'
 import LiveView from './views/live/LiveView'
 import TwinView from './views/twin/TwinView'
 import GraphView from './views/graph/GraphView'
+import RaceView, { useRaceClock } from './views/race/RaceView'
 import { useRunStream } from './data/useRunStream'
 import { usePlayback } from './data/usePlayback'
 import {
@@ -34,6 +35,7 @@ type Source =
   | { kind: 'mock'; name: 'happy' | 'breach' }
   | { kind: 'twin'; supervised: string; unsupervised: string }
   | { kind: 'canned'; name: string }
+  | { kind: 'race' }
 
 const SCENARIOS: { key: string; label: string; blurb: string }[] = [
   { key: 's1', label: 'S1 · contradictory instruction', blurb: 'a plausible redirect that supersedes the objective' },
@@ -86,6 +88,7 @@ export default function App() {
   const [scrub, setScrub] = useState<number | null>(null)
   const [view, setView] = useState<'timeline' | 'graph'>('timeline')
   const [twin, setTwin] = useState<{ supervised: DhruvaEvent[]; unsupervised: DhruvaEvent[] } | null>(null)
+  const [race, setRace] = useState<{ supervised: DhruvaEvent[]; unsupervised: DhruvaEvent[] } | null>(null)
 
   const liveRunId = source?.kind === 'live' ? source.runId : null
   const stream = useRunStream(liveRunId)
@@ -98,7 +101,7 @@ export default function App() {
   // through a UI to reach the thing you are about to talk over.
   useEffect(() => {
     if (!new URLSearchParams(window.location.search).has('demo')) return
-    void openCanned('s1-supervised')
+    void openRace()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -177,6 +180,15 @@ export default function App() {
   const isStatic = source?.kind === 'canned' || source?.kind === 'mock' || source?.kind === 'replay'
   const playback = usePlayback(isCanned ? allEvents : [], 60_000)
   const maxSeq = allEvents.length ? allEvents[allEvents.length - 1].seq : 0
+
+  const isRace = source?.kind === 'race'
+  const raceMax = race ? Math.max(...race.supervised.map((e) => e.seq)) : 0
+  // Hold on the supervised rollback so its four beats can be narrated.
+  const raceHolds = useMemo(
+    () => (race ? race.supervised.filter((e) => e.type === 'rollback').map((e) => e.seq) : []),
+    [race],
+  )
+  const clock = useRaceClock(raceMax, raceHolds, 75_000)
   const shown = useMemo(() => {
     if (isCanned) return allEvents.slice(0, playback.index + 1)
     return scrub === null ? allEvents : allEvents.filter((e) => e.seq <= scrub)
@@ -198,6 +210,25 @@ export default function App() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [isCanned, playback])
+
+  useEffect(() => {
+    if (!isRace) return
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null
+      if (el && ['INPUT', 'TEXTAREA'].includes(el.tagName)) return
+      if (e.code === 'Space') {
+        e.preventDefault()
+        // While a rollback beat is held, space advances the beat rather than the clock.
+        if (clock.inStage) clock.advanceStage()
+        else if (clock.playing) clock.pause()
+        else clock.play()
+      } else if (e.key.toLowerCase() === 'r') {
+        clock.restart()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [isRace, clock])
 
   async function launch(withScenario: boolean) {
     setBusy(true)
@@ -271,6 +302,23 @@ export default function App() {
     }
   }
 
+  async function openRace() {
+    setBusy(true)
+    setError(null)
+    try {
+      const [sup, uns] = await Promise.all([
+        getCanned('s1-supervised'),
+        getCanned('s1-unsupervised'),
+      ])
+      setRace({ supervised: sup, unsupervised: uns })
+      setSource({ kind: 'race' })
+    } catch (exc) {
+      setError(String(exc))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function openCanned(name: string) {
     setBusy(true)
     setError(null)
@@ -309,7 +357,8 @@ export default function App() {
   if (source?.kind === 'mock') label = `mock · ${source.name}`
   else if (source?.kind === 'canned') label = `replay · ${source.name}`
   else if (source?.kind === 'twin') label = `twin · ${source.supervised}`
-  else if (source) label = source.runId
+  else if (source?.kind === 'race') label = 'supervised vs unsupervised'
+  else if (source?.kind === 'live' || source?.kind === 'replay') label = source.runId
 
   return (
     <div className="min-h-screen bg-base-900 text-ink-primary">
@@ -401,7 +450,7 @@ export default function App() {
           </div>
         ) : null}
 
-        {source && source.kind !== 'twin' ? (
+        {source && source.kind !== 'twin' && source.kind !== 'race' ? (
           <div className="flex gap-tight">
             {(['timeline', 'graph'] as const).map((v) => (
               <button
@@ -421,7 +470,42 @@ export default function App() {
           </div>
         ) : null}
 
-        {source?.kind === 'twin' ? (
+        {isRace && race ? (
+          <div className="flex flex-wrap items-center gap-gutter rounded-panel border border-coherence-400/40 bg-base-800 px-panel py-snug">
+            <button
+              type="button"
+              onClick={() => (clock.inStage ? clock.advanceStage() : clock.playing ? clock.pause() : clock.play())}
+              className="rounded-mark border border-coherence-400 px-5 py-2 font-mono text-micro tracking-[0.14em] text-coherence-400 uppercase hover:bg-coherence-400/10"
+            >
+              {clock.inStage ? '→ next beat' : clock.playing ? '❚❚ pause' : '▶ play'}
+            </button>
+            <button
+              type="button"
+              onClick={clock.restart}
+              className="rounded-mark border border-edge-default px-3 py-2 font-mono text-micro tracking-[0.14em] text-ink-secondary uppercase hover:border-edge-strong"
+            >
+              ↺ restart
+            </button>
+            <input
+              type="range"
+              min={0}
+              max={raceMax}
+              value={clock.seq}
+              onChange={(e) => clock.seek(Number(e.target.value))}
+              className="h-1 min-w-40 flex-1 accent-coherence-400"
+            />
+            <span className="font-mono text-micro text-ink-muted">space · R</span>
+          </div>
+        ) : null}
+
+        {isRace && race ? (
+          <RaceView
+            supervised={race.supervised}
+            unsupervised={race.unsupervised}
+            seq={clock.seq}
+            stage={clock.stage}
+          />
+        ) : source?.kind === 'twin' ? (
           <TwinView
             supervised={twin?.supervised ?? []}
             unsupervised={twin?.unsupervised ?? []}
@@ -513,6 +597,13 @@ export default function App() {
               className="rounded-mark border border-edge-default px-4 py-2 font-mono text-micro tracking-[0.14em] text-ink-secondary uppercase transition-colors hover:border-edge-strong disabled:opacity-40"
             >
               twin run
+            </button>
+            <button
+              type="button"
+              onClick={openRace}
+              className="rounded-mark border border-coherence-400 px-4 py-2 font-mono text-micro tracking-[0.14em] text-coherence-400 uppercase hover:bg-coherence-400/10"
+            >
+              ▶ demo
             </button>
             <button
               type="button"
