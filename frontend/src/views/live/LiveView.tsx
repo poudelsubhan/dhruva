@@ -339,34 +339,50 @@ export default function LiveView({
         >
           <div className="flex max-h-64 flex-col gap-tight overflow-y-auto">
             {rows.length === 0 ? <p className="text-caption text-ink-muted">Nothing learned yet.</p> : null}
-            {rows.map((entry) => {
-              const cited = selected ? entry.sourceSeqs.includes(selected.seq) : false
-              return (
-                <div
-                  key={entry.id}
-                  className={clsx(
-                    'rounded-mark border px-snug py-tick text-caption',
-                    entry.status === 'evicted'
-                      ? 'border-alarm-400/50 bg-alarm-400/10 text-ink-muted'
-                      : 'border-edge-subtle text-ink-secondary',
-                    cited && 'ring-1 ring-ink-primary',
-                  )}
-                >
-                  <span className="font-mono text-micro text-ink-muted">[{entry.kind}]</span>{' '}
-                  <span className={entry.status === 'evicted' ? 'line-through' : undefined}>
-                    {entry.text}
-                  </span>
-                  {entry.status === 'evicted' ? (
-                    <span className="mt-tick block font-mono text-micro text-alarm-400 tabular-nums">
-                      evicted · {(entry.reason ?? 'tainted').replace(/_/g, ' ')}
-                      {entry.taint !== undefined
-                        ? ` · taint ${entry.taint.toFixed(2)} ≥ ${EVICT_AT.toFixed(2)}`
-                        : ''}
-                    </span>
-                  ) : null}
-                </div>
-              )
-            })}
+            {/* Evicted first. They are the point of the panel, and burying them under ten kept rows
+                means the one thing worth pointing at is below the fold. */}
+            {evictedCount ? (
+              <span className="font-mono text-micro tracking-[0.14em] text-alarm-400 uppercase">
+                evicted on rollback
+              </span>
+            ) : null}
+            {[...rows]
+              .sort((a, b) => Number(b.status === 'evicted') - Number(a.status === 'evicted'))
+              .map((entry, i) => {
+                const cited = selected ? entry.sourceSeqs.includes(selected.seq) : false
+                const firstKept = evictedCount > 0 && i === evictedCount
+                return (
+                  <div key={entry.id} className="contents">
+                    {firstKept ? (
+                      <span className="mt-tick font-mono text-micro tracking-[0.14em] text-state-pass uppercase">
+                        retained
+                      </span>
+                    ) : null}
+                    <div
+                      className={clsx(
+                        'rounded-mark border px-snug py-tick text-caption',
+                        entry.status === 'evicted'
+                          ? 'border-alarm-400/50 bg-alarm-400/10 text-ink-muted'
+                          : 'border-edge-subtle text-ink-secondary',
+                        cited && 'ring-1 ring-ink-primary',
+                      )}
+                    >
+                      <span className="font-mono text-micro text-ink-muted">[{entry.kind}]</span>{' '}
+                      <span className={entry.status === 'evicted' ? 'line-through' : undefined}>
+                        {entry.text}
+                      </span>
+                      {entry.status === 'evicted' ? (
+                        <span className="mt-tick block font-mono text-micro text-alarm-400 tabular-nums">
+                          evicted · {(entry.reason ?? 'tainted').replace(/_/g, ' ')}
+                          {entry.taint !== undefined
+                            ? ` · taint ${entry.taint.toFixed(2)} ≥ ${EVICT_AT.toFixed(2)}`
+                            : ''}
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                )
+              })}
           </div>
           {audit ? (
             <p className="mt-snug text-micro text-ink-muted">
